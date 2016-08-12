@@ -9,7 +9,6 @@ lammps.pdf
 *.x
 *.exe
 *.dll
-
 Obj_*
 log.*
 *.log

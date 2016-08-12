@@ -1,0 +1,11 @@
+The BOP package add a compute bop/atom command which
+calculates the bond-orientational order parameters for each atom.
+
+== Credits and license ==
+
+This package contains code from bopcalc (http://simgroup.task.gda.pl/bopcalc.html)
+for computing the spherical functions and the BOP invariants.
+
+Licensed under the GPLv2 license.
+
+Please contribute changes back to the community.

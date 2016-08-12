@@ -1,0 +1,72 @@
+"LAMMPS WWW Site"_lws - "LAMMPS Documentation"_ld - "LAMMPS Commands"_lc :c
+
+:link(lws,http://lammps.sandia.gov)
+:link(ld,Manual.html)
+:link(lc,Section_commands.html#comm)
+
+:line
+
+compute bop/atom command :h3
+
+[Syntax:]
+
+compute ID group-ID bop/atom cutoff quality :pre
+
+ID, group-ID are documented in "compute"_compute.html command
+bop/atom = style name of this compute command
+cutoff = distance within which to count coordination neighbors (distance units)
+q = spherical harmonics grid quality (0-5)
+
+[Examples:]
+
+compute 1 all bop/atom 5.0 :pre
+compute 1 all bop/atom 4.5 3 :pre
+
+[Description:]
+
+Define a computation that calculates the bond order parameters for
+each atom in the group.
+
+The neighbor list needed to compute this quantity is constructed each
+time the calculation is performed (e.g. each time a snapshot of atoms
+is dumped).  Thus it can be inefficient to compute/dump this quantity
+too frequently or to have multiple compute/dump commands, each with a
+{bop/atom} style.
+
+An efficient technique for calculating the bond-orientational order
+parameters is taken from "bopcalc"_http://lammps.sandia.gov/bench.html,
+which is an implementation of the algorithm described in the 2016
+"paper"_#Winczewski Winczewski et al.
+
+[Output info:]
+
+This compute calculates a per-atom array with 4 columns.
+These values can be accessed by any command that uses
+per-atom values from a compute as input.  See "Section_howto
+15"_Section_howto.html#howto_15 for an overview of LAMMPS output
+options.
+
+The 4 columns are the four bond order parameter invariants:
+Q4, Q6, W4 and W6. The invariants and their typical values
+for different lattices are described in the 1983 "paper"_#Paper
+by Steinhardt, et al.
+
+[Restrictions:]
+
+This compute is part of the USER-BOP package.  It is only enabled if
+LAMMPS was built with that package.  See the "Making
+LAMMPS"_Section_start.html#start_3 section for more info.
+
+[Related commands:]
+
+"compute cna/atom"_compute_cna_atom.html
+"compute centro/atom"_compute_centro_atom.html
+
+[Default:] none
+
+:line
+
+:link(Winczewski)
+[(Winczewski)] Winczewski, Dziedzic, and Rybicki, Computer Physics Communications, 198, 128 (2016).
+:link(Steinhardt)
+[(Steinhardt)] Steinhardt, Nelson, and Ronchetti, Phys. Rev. B, 28, 784 (1983).
