@@ -189,31 +189,50 @@ ComputeBopAtom::ComputeBopAtom(LAMMPS *lmp, int narg, char **arg) :
   cutsq = -1.0;
   grid_quality = 5;
 
-  if (narg < 4) error->all(FLERR,"Illegal compute bop/atom command");
-
-  double cutoff = force->inumeric(FLERR,arg[3]);
-  cutsq = cutoff * cutoff;
-
-  if (narg > 4)
+  for (int a = 3; a < narg; ++a)
   {
-      grid_quality = force->inumeric(FLERR, arg[4]);
+    if (strcmp(arg[a], "cutoff") == 0)
+    {
+      if (a >= narg - 1)
+      {
+        error->all(FLERR, "Missing argument for 'cutoff' in compute bop/atom command");
+      }
+      a++;
+      double cutoff = atof(arg[a]);
+      has_cutoff = true;
+      cutsq = cutoff * cutoff;
+    }
+    else if (strcmp(arg[a], "quality") == 0)
+    {
+      if (a >= narg - 1)
+      {
+        error->all(FLERR, "Missing argument for 'quality' in compute bop/atom command");
+      }
+      a++;
+      grid_quality = atoi(arg[a]);
+    }
+  }
+  if (!has_cutoff)
+  {
+    error->all(FLERR, "Missing required option 'cutoff' in compute bop/atom command");
   }
 
+
   if ( grid_quality == 0 )
-      spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_0, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_0, memory);
+    spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_0, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_0, memory);
   else if ( grid_quality == 1 )
-      spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_1, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_1, memory);
+    spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_1, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_1, memory);
   else if ( grid_quality == 2 )
-      spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_2, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_2, memory);
+    spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_2, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_2, memory);
   else if ( grid_quality == 3 )
-      spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_3, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_3, memory);
+    spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_3, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_3, memory);
   else if ( grid_quality == 4 )
-      spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_4, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_4, memory);
+    spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_4, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_4, memory);
   else if ( grid_quality == 5 )
-      spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_5, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_5, memory);
+    spherical_harmonics = new SphericalHarmonics(BOP_CALCULATOR_N_KNOTS_LEGENDRE_5, BOP_CALCULATOR_N_KNOTS_TRIGONOMETRIC_5, memory);
   else
   {
-      error->all(FLERR, "Invalid 'quality' value in compute bop/atom command, supported values are 0-5");
+    error->all(FLERR, "Invalid 'quality' value in compute bop/atom command, supported values are 0-5");
   }
 
   nmax = 0;
@@ -320,20 +339,20 @@ void ComputeBopAtom::compute_peratom()
 
           if ( delx == 0.0 )
           {
-              if ( dely == 0.0 )
-                  phi = 0.0;
-              else if ( dely > 0.0 )
-                  phi = HALF_OF_PI;
-              else
-                  phi = THREE_HALFS_OF_PI;
+            if ( dely == 0.0 )
+              phi = 0.0;
+            else if ( dely > 0.0 )
+              phi = HALF_OF_PI;
+            else
+              phi = THREE_HALFS_OF_PI;
           }
           else
           {
-              phi = atan(dely / delx);
-              if ( delx < 0.0 )
-                  phi += PI;
-              else if ( dely < 0.0 )
-                  phi += TWO_PI;
+            phi = atan(dely / delx);
+            if ( delx < 0.0 )
+              phi += PI;
+            else if ( dely < 0.0 )
+              phi += TWO_PI;
           }
 
           double area = 1.0; // TODO: Calculate the area
@@ -367,8 +386,8 @@ void ComputeBopAtom::compute_peratom()
       double w4, w6;
       double bracket_w4, bracket_w6;
       double inv_of_total_area = 1.0 / total_area;
-      
-      
+
+
 // l = 4
 // m = 0
       modulus_squared[0] = q_lm_vector[0].re * q_lm_vector[0].re;
@@ -426,10 +445,10 @@ void ComputeBopAtom::compute_peratom()
 //                 + 6 x W3j(4 4 4 | -4 0 4) | q_{4, 4} |^2 ]
 
       bracket_w4 = mult_4_0 * modulus_squared[0]
-                    + mult_4_1 * modulus_squared[1]
-                    + mult_4_2 * modulus_squared[2]
-                    + mult_4_3 * modulus_squared[3]
-                    + mult_4_4 * modulus_squared[4];
+                   + mult_4_1 * modulus_squared[1]
+                   + mult_4_2 * modulus_squared[2]
+                   + mult_4_3 * modulus_squared[3]
+                   + mult_4_4 * modulus_squared[4];
 
 // przyczynek do w6:
 // Re(q_{6,0}) * [ + 1 x W3j(6 6 6 |  0 0 0) | q_{6, 0} |^2 +
@@ -441,12 +460,12 @@ void ComputeBopAtom::compute_peratom()
 //                 + 6 x W3j(6 6 6 | -6 0 6) | q_{6, 6} |^2 ]
 
       bracket_w6 = mult_6_0 * modulus_squared[5]
-                    + mult_6_1 * modulus_squared[6]
-                    + mult_6_2 * modulus_squared[7]
-                    + mult_6_3 * modulus_squared[8]
-                    + mult_6_4 * modulus_squared[9]
-                    + mult_6_5 * modulus_squared[10]
-                    + mult_6_6 * modulus_squared[11];
+                   + mult_6_1 * modulus_squared[6]
+                   + mult_6_2 * modulus_squared[7]
+                   + mult_6_3 * modulus_squared[8]
+                   + mult_6_4 * modulus_squared[9]
+                   + mult_6_5 * modulus_squared[10]
+                   + mult_6_6 * modulus_squared[11];
 
       w4 = q_lm_vector[0].re * bracket_w4;
       w6 = q_lm_vector[5].re * bracket_w6;
