@@ -198,7 +198,7 @@ ComputeBopAtom::ComputeBopAtom(LAMMPS *lmp, int narg, char **arg) :
         error->all(FLERR, "Missing argument for 'cutoff' in compute bop/atom command");
       }
       a++;
-      double cutoff = atof(arg[a]);
+      double cutoff = force->numeric(FLERR, arg[a]);
       has_cutoff = true;
       cutsq = cutoff * cutoff;
     }
@@ -209,7 +209,7 @@ ComputeBopAtom::ComputeBopAtom(LAMMPS *lmp, int narg, char **arg) :
         error->all(FLERR, "Missing argument for 'quality' in compute bop/atom command");
       }
       a++;
-      grid_quality = atoi(arg[a]);
+      grid_quality = force->inumeric(FLERR, arg[a]);
     }
   }
   if (!has_cutoff)
