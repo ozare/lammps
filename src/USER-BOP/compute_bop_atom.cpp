@@ -189,32 +189,15 @@ ComputeBopAtom::ComputeBopAtom(LAMMPS *lmp, int narg, char **arg) :
   cutsq = -1.0;
   grid_quality = 5;
 
-  for (int a = 3; a < narg; ++a)
+  if (narg < 4) error->all(FLERR,"Illegal compute bop/atom command");
+
+  double cutoff = force->numeric(FLERR,arg[3]);
+  has_cutoff = true;
+  cutsq = cutoff * cutoff;
+
+  if (narg > 4)
   {
-    if (strcmp(arg[a], "cutoff") == 0)
-    {
-      if (a >= narg - 1)
-      {
-        error->all(FLERR, "Missing argument for 'cutoff' in compute bop/atom command");
-      }
-      a++;
-      double cutoff = force->numeric(FLERR, arg[a]);
-      has_cutoff = true;
-      cutsq = cutoff * cutoff;
-    }
-    else if (strcmp(arg[a], "quality") == 0)
-    {
-      if (a >= narg - 1)
-      {
-        error->all(FLERR, "Missing argument for 'quality' in compute bop/atom command");
-      }
-      a++;
-      grid_quality = force->inumeric(FLERR, arg[a]);
-    }
-  }
-  if (!has_cutoff)
-  {
-    error->all(FLERR, "Missing required option 'cutoff' in compute bop/atom command");
+    grid_quality = force->inumeric(FLERR, arg[4]);
   }
 
 
