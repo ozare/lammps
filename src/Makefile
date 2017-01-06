@@ -48,11 +48,7 @@ PACKAGE = asphere body class2 colloid compress coreshell dipole gpu \
 	  kokkos kspace manybody mc meam misc molecule mpiio opt peri poems \
 	  python qeq replica rigid shock snap srd voronoi
 
-<<<<<<< HEAD
-PACKUSER = user-atc user-awpmd user-bop user-cg-cmm user-colvars user-cuda \
-=======
-PACKUSER = user-atc user-awpmd user-cg-cmm user-colvars \
->>>>>>> 2fc5ad1ebd8609e2768b73c303f3fbddbe114893
+PACKUSER = user-atc user-awpmd user-bop user-cg-cmm user-colvars \
 	   user-diffraction user-dpd user-drude user-eff user-fep user-h5md \
 	   user-hadress user-intel user-lb user-manifold user-mgpt \
 	   user-misc user-molfile user-nc-dump user-omp user-phonon \
