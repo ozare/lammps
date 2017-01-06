@@ -1,13 +1,13 @@
 /*
 //@HEADER
 // ************************************************************************
-// 
+//
 //                        Kokkos v. 2.0
 //              Copyright (2014) Sandia Corporation
-// 
+//
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -36,7 +36,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Questions? Contact  H. Carter Edwards (hcedwar@sandia.gov)
-// 
+//
 // ************************************************************************
 //@HEADER
 */
@@ -46,6 +46,10 @@
 #include <Kokkos_Macros.hpp>
 
 #if defined( KOKKOS_HAVE_PTHREAD )
+#ifdef KOKKOS_LAMBDA
+#undef KOKKOS_LAMBDA
+#endif
+#define KOKKOS_LAMBDA [=]
 
 #include <Kokkos_Core.hpp>
 
@@ -62,6 +66,7 @@
 #include <TestViewSubview.hpp>
 #include <TestViewOfClass.hpp>
 #include <TestAtomic.hpp>
+#include <TestAtomicOperations.hpp>
 
 #include <TestReduce.hpp>
 #include <TestScan.hpp>
@@ -70,13 +75,20 @@
 #include <TestAggregate.hpp>
 #include <TestAggregateReduction.hpp>
 #include <TestCompilerMacros.hpp>
+#include <TestTaskPolicy.hpp>
+#include <TestMemoryPool.hpp>
+
+
 #include <TestCXX11.hpp>
 #include <TestCXX11Deduction.hpp>
 #include <TestTeamVector.hpp>
 #include <TestMemorySpaceTracking.hpp>
 #include <TestTemplateMetaFunctions.hpp>
 
-#include <TestTaskPolicy.hpp>
+
+#include <TestPolicyConstruction.hpp>
+
+#include <TestMDRange.hpp>
 
 namespace Test {
 
@@ -103,7 +115,6 @@ protected:
     Kokkos::Threads::initialize( threads_count );
     Kokkos::Threads::finalize();
 
-    
     threads_count = std::max( 1u , numa_count * 2 )
                   * std::max( 2u , ( cores_per_numa * threads_per_core ) / 2 );
 
@@ -134,6 +145,12 @@ TEST_F( threads , init ) {
   ;
 }
 
+TEST_F( threads , md_range ) {
+  TestMDRange_2D< Kokkos::Threads >::test_for2(100,100);
+
+  TestMDRange_3D< Kokkos::Threads >::test_for3(100,100,100);
+}
+
 TEST_F( threads , dispatch )
 {
   const int repeat = 100 ;
@@ -146,6 +163,11 @@ TEST_F( threads , dispatch )
 
 TEST_F( threads , impl_shared_alloc ) {
   test_shared_alloc< Kokkos::HostSpace , Kokkos::Threads >();
+}
+
+TEST_F( threads, policy_construction) {
+  TestRangePolicyConstruction< Kokkos::Threads >();
+  TestTeamPolicyConstruction< Kokkos::Threads >();
 }
 
 TEST_F( threads , impl_view_mapping ) {
@@ -221,15 +243,32 @@ TEST_F( threads, view_aggregate ) {
 
 TEST_F( threads , range_tag )
 {
-  TestRange< Kokkos::Threads >::test_for(1000);
-  TestRange< Kokkos::Threads >::test_reduce(1000);
-  TestRange< Kokkos::Threads >::test_scan(1000);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_for(2);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_reduce(2);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_scan(2);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_for(3);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_reduce(3);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_scan(3);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_dynamic_policy(2);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_for(1000);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_reduce(1000);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_scan(1000);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_for(1001);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_reduce(1001);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_scan(1001);
+  TestRange< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_dynamic_policy(1000);
 }
 
 TEST_F( threads , team_tag )
 {
-  TestTeamPolicy< Kokkos::Threads >::test_for(1000);
-  TestTeamPolicy< Kokkos::Threads >::test_reduce(1000);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_for(2);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_reduce(2);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_for(2);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_reduce(2);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_for(1000);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >::test_reduce(1000);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_for(1000);
+  TestTeamPolicy< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >::test_reduce(1000);
 }
 
 TEST_F( threads, long_reduce) {
@@ -240,12 +279,26 @@ TEST_F( threads, double_reduce) {
   TestReduce< double ,   Kokkos::Threads >( 1000000 );
 }
 
+TEST_F( threads , reducers )
+{
+  TestReducers<int, Kokkos::Threads>::execute_integer();
+  TestReducers<size_t, Kokkos::Threads>::execute_integer();
+  TestReducers<double, Kokkos::Threads>::execute_float();
+  TestReducers<Kokkos::complex<double>, Kokkos::Threads>::execute_basic();
+}
+
 TEST_F( threads, team_long_reduce) {
-  TestReduceTeam< long ,   Kokkos::Threads >( 100000 );
+  TestReduceTeam< long ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >( 3 );
+  TestReduceTeam< long ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >( 3 );
+  TestReduceTeam< long ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >( 100000 );
+  TestReduceTeam< long ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >( 100000 );
 }
 
 TEST_F( threads, team_double_reduce) {
-  TestReduceTeam< double ,   Kokkos::Threads >( 100000 );
+  TestReduceTeam< double ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >( 3 );
+  TestReduceTeam< double ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >( 3 );
+  TestReduceTeam< double ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >( 100000 );
+  TestReduceTeam< double ,   Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >( 100000 );
 }
 
 TEST_F( threads, long_reduce_dynamic ) {
@@ -261,14 +314,20 @@ TEST_F( threads, long_reduce_dynamic_view ) {
 }
 
 TEST_F( threads, team_shared_request) {
-  TestSharedTeam< Kokkos::Threads >();
+  TestSharedTeam< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >();
+  TestSharedTeam< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >();
 }
 
-#if defined(KOKKOS_HAVE_CXX11_DISPATCH_LAMBDA) && !defined(KOKKOS_HAVE_CUDA)
+#if defined(KOKKOS_HAVE_CXX11_DISPATCH_LAMBDA)
 TEST_F( threads, team_lambda_shared_request) {
-  TestLambdaSharedTeam< Kokkos::Threads >();
+  TestLambdaSharedTeam< Kokkos::HostSpace, Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >();
+  TestLambdaSharedTeam< Kokkos::HostSpace, Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >();
 }
 #endif
+
+TEST_F( threads, shmem_size) {
+  TestShmemSize< Kokkos::Threads >();
+}
 
 TEST_F( threads , view_remap )
 {
@@ -345,14 +404,82 @@ TEST_F( threads , atomics )
   ASSERT_TRUE( ( TestAtomic::Loop<float,Kokkos::Threads>(100,2) ) );
   ASSERT_TRUE( ( TestAtomic::Loop<float,Kokkos::Threads>(100,3) ) );
 
-#if defined( KOKKOS_ENABLE_ASM )
   ASSERT_TRUE( ( TestAtomic::Loop<Kokkos::complex<double> ,Kokkos::Threads>(100,1) ) );
   ASSERT_TRUE( ( TestAtomic::Loop<Kokkos::complex<double> ,Kokkos::Threads>(100,2) ) );
   ASSERT_TRUE( ( TestAtomic::Loop<Kokkos::complex<double> ,Kokkos::Threads>(100,3) ) );
-#endif
 
   ASSERT_TRUE( ( TestAtomic::Loop<TestAtomic::SuperScalar<3>, Kokkos::Threads>(loop_count,1) ) );
   ASSERT_TRUE( ( TestAtomic::Loop<TestAtomic::SuperScalar<3>, Kokkos::Threads>(loop_count,2) ) );
+  ASSERT_TRUE( ( TestAtomic::Loop<TestAtomic::SuperScalar<3>, Kokkos::Threads>(loop_count,3) ) );
+}
+
+TEST_F( threads , atomic_operations )
+{
+  const int start = 1; //Avoid zero for division
+  const int end = 11;
+  for (int i = start; i < end; ++i)
+  {
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 4 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 5 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 6 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 7 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 8 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<int,Kokkos::Threads>(start, end-i, 9 ) ) );
+
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 4 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 5 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 6 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 7 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 8 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned int,Kokkos::Threads>(start, end-i, 9 ) ) );
+
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 4 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 5 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 6 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 7 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 8 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long int,Kokkos::Threads>(start, end-i, 9 ) ) );
+
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 4 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 5 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 6 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 7 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 8 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<unsigned long int,Kokkos::Threads>(start, end-i, 9 ) ) );
+
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 4 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 5 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 6 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 7 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 8 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestIntegralType<long long int,Kokkos::Threads>(start, end-i, 9 ) ) );
+
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<double,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<double,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<double,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<double,Kokkos::Threads>(start, end-i, 4 ) ) );
+
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<float,Kokkos::Threads>(start, end-i, 1 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<float,Kokkos::Threads>(start, end-i, 2 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<float,Kokkos::Threads>(start, end-i, 3 ) ) );
+    ASSERT_TRUE( ( TestAtomicOperations::AtomicOperationsTestNonIntegralType<float,Kokkos::Threads>(start, end-i, 4 ) ) );
+  }
+
 }
 
 //----------------------------------------------------------------------------
@@ -384,8 +511,10 @@ TEST_F( threads , scan )
 
 TEST_F( threads , team_scan )
 {
-  TestScanTeam< Kokkos::Threads >( 10 );
-  TestScanTeam< Kokkos::Threads >( 10000 );
+  TestScanTeam< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >( 10 );
+  TestScanTeam< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >( 10 );
+  TestScanTeam< Kokkos::Threads , Kokkos::Schedule<Kokkos::Static> >( 10000 );
+  TestScanTeam< Kokkos::Threads , Kokkos::Schedule<Kokkos::Dynamic> >( 10000 );
 }
 
 //----------------------------------------------------------------------------
@@ -398,6 +527,16 @@ TEST_F( threads , compiler_macros )
 TEST_F( threads , memory_space )
 {
   TestMemorySpace< Kokkos::Threads >();
+}
+
+TEST_F( threads , memory_pool )
+{
+  bool val = TestMemoryPool::test_mempool< Kokkos::Threads >( 128, 128000000 );
+  ASSERT_TRUE( val );
+
+  TestMemoryPool::test_mempool2< Kokkos::Threads >( 64, 4, 1000000, 2000000 );
+
+  TestMemoryPool::test_memory_exhaustion< Kokkos::Threads >();
 }
 
 //----------------------------------------------------------------------------
@@ -441,17 +580,34 @@ TEST_F( threads , team_vector )
   ASSERT_TRUE( ( TestTeamVector::Test< Kokkos::Threads >(10) ) );
 }
 
+#if defined( KOKKOS_ENABLE_TASKPOLICY )
+
 TEST_F( threads , task_policy )
 {
   TestTaskPolicy::test_task_dep< Kokkos::Threads >( 10 );
-  for ( long i = 0 ; i < 25 ; ++i ) TestTaskPolicy::test_fib< Kokkos::Threads >(i);
-  for ( long i = 0 ; i < 35 ; ++i ) TestTaskPolicy::test_fib2< Kokkos::Threads >(i);
+
+  for ( long i = 0 ; i < 25 ; ++i ) {
+//    printf( "test_fib():  %2ld\n", i );
+    TestTaskPolicy::test_fib< Kokkos::Threads >(i);
+  }
+  for ( long i = 0 ; i < 35 ; ++i ) {
+//    printf( "test_fib2(): %2ld\n", i );
+    TestTaskPolicy::test_fib2< Kokkos::Threads >(i);
+  }
 }
 
 TEST_F( threads , task_team )
 {
   TestTaskPolicy::test_task_team< Kokkos::Threads >(1000);
 }
+
+TEST_F( threads , task_latch )
+{
+  TestTaskPolicy::test_latch< Kokkos::Threads >(10);
+  TestTaskPolicy::test_latch< Kokkos::Threads >(1000);
+}
+
+#endif /* #if defined( KOKKOS_ENABLE_TASKPOLICY ) */
 
 } // namespace Test
 

@@ -32,7 +32,8 @@ using namespace LAMMPS_NS;
 /* ---------------------------------------------------------------------- */
 
 ComputeCoordAtom::ComputeCoordAtom(LAMMPS *lmp, int narg, char **arg) :
-  Compute(lmp, narg, arg)
+  Compute(lmp, narg, arg),
+  typelo(NULL), typehi(NULL), cvec(NULL), carray(NULL)
 {
   if (narg < 4) error->all(FLERR,"Illegal compute coord/atom command");
 
@@ -52,7 +53,7 @@ ComputeCoordAtom::ComputeCoordAtom(LAMMPS *lmp, int narg, char **arg) :
     ncol = 0;
     int iarg = 4;
     while (iarg < narg) {
-      force->bounds(arg[iarg],ntypes,typelo[ncol],typehi[ncol]);
+      force->bounds(FLERR,arg[iarg],ntypes,typelo[ncol],typehi[ncol]);
       if (typelo[ncol] > typehi[ncol])
         error->all(FLERR,"Illegal compute coord/atom command");
       ncol++;
@@ -65,8 +66,6 @@ ComputeCoordAtom::ComputeCoordAtom(LAMMPS *lmp, int narg, char **arg) :
   else size_peratom_cols = ncol;
 
   nmax = 0;
-  cvec = NULL;
-  carray = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -125,7 +124,7 @@ void ComputeCoordAtom::compute_peratom()
 
   // grow coordination array if necessary
 
-  if (atom->nlocal > nmax) {
+  if (atom->nmax > nmax) {
     if (ncol == 1) {
       memory->destroy(cvec);
       nmax = atom->nmax;

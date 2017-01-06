@@ -123,6 +123,7 @@ void ReadData::command(int narg, char **arg)
   // optional args
 
   addflag = NONE;
+  coeffflag = 1;
   id_offset = 0;
   offsetflag = shiftflag = 0;
   toffset = boffset = aoffset = doffset = ioffset = 0;
@@ -172,7 +173,9 @@ void ReadData::command(int narg, char **arg)
       if (domain->dimension == 2 && shift[2] != 0.0)
         error->all(FLERR,"Non-zero read_data shift z value for 2d simulation");
       iarg += 4;
-
+    } else if (strcmp(arg[iarg],"nocoeff") == 0) {
+      coeffflag = 0;
+      iarg ++;
     } else if (strcmp(arg[iarg],"extra/atom/types") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal read_data command");
       extra_atom_types = force->inumeric(FLERR,arg[iarg+1]);
@@ -279,6 +282,50 @@ void ReadData::command(int narg, char **arg)
     MPI_Allreduce(&max,&id_offset,1,MPI_LMP_TAGINT,MPI_MAX,world);
   }
 
+  // set up pointer to hold original styles while we replace them with "zero"
+
+  Pair *saved_pair = NULL;
+  Bond *saved_bond = NULL;
+  Angle *saved_angle = NULL;
+  Dihedral *saved_dihedral = NULL;
+  Improper *saved_improper = NULL;
+  KSpace *saved_kspace = NULL;
+
+  if (coeffflag == 0) {
+    char *coeffs[2];
+    coeffs[0] = (char *) "10.0";
+    coeffs[1] = (char *) "nocoeff";
+
+    saved_pair = force->pair;
+    force->pair = NULL;
+    force->create_pair("zero",0);
+    if (force->pair) force->pair->settings(2,coeffs);
+
+    coeffs[0] = coeffs[1];
+    saved_bond = force->bond;
+    force->bond = NULL;
+    force->create_bond("zero",0);
+    if (force->bond) force->bond->settings(1,coeffs);
+
+    saved_angle = force->angle;
+    force->angle = NULL;
+    force->create_angle("zero",0);
+    if (force->angle) force->angle->settings(1,coeffs);
+
+    saved_dihedral = force->dihedral;
+    force->dihedral = NULL;
+    force->create_dihedral("zero",0);
+    if (force->dihedral) force->dihedral->settings(1,coeffs);
+
+    saved_improper = force->improper;
+    force->improper = NULL;
+    force->create_improper("zero",0);
+    if (force->improper) force->improper->settings(1,coeffs);
+
+    saved_kspace = force->kspace;
+    force->kspace = NULL;
+  }
+
   // -----------------------------------------------------------------
 
   // perform 1-pass read if no molecular topology in file
@@ -300,6 +347,9 @@ void ReadData::command(int narg, char **arg)
   natoms = ntypes = 0;
   nbonds = nangles = ndihedrals = nimpropers = 0;
   nbondtypes = nangletypes = ndihedraltypes = nimpropertypes = 0;
+
+  boxlo[0] = boxlo[1] = boxlo[2] = -0.5;
+  boxhi[0] = boxhi[1] = boxhi[2] = 0.5;
   triclinic = 0;
   keyword[0] = '\0';
 
@@ -653,7 +703,11 @@ void ReadData::command(int narg, char **arg)
     if (addflag == NONE) atom->deallocate_topology();
     atom->avec->grow(atom->nmax);
   }
+
+  // init per-atom fix/compute/variable values for created atoms
   
+  atom->data_fix_compute_variable(nlocal_previous,atom->nlocal);
+
   // assign atoms added by this data file to specified group
 
   if (groupbit) {
@@ -778,6 +832,27 @@ void ReadData::command(int narg, char **arg)
       error->all(FLERR,
                  "Read_data shrink wrap did not assign all atoms correctly");
   }
+
+  // restore old styles, when reading with nocoeff flag given
+  
+  if (coeffflag == 0) {
+    if (force->pair) delete force->pair;
+    force->pair = saved_pair;
+
+    if (force->bond) delete force->bond;
+    force->bond = saved_bond;
+
+    if (force->angle) delete force->angle;
+    force->angle = saved_angle;
+
+    if (force->dihedral) delete force->dihedral;
+    force->dihedral = saved_dihedral;
+
+    if (force->improper) delete force->improper;
+    force->improper = saved_improper;
+
+    force->kspace = saved_kspace;
+  }
 }
 
 /* ----------------------------------------------------------------------
@@ -854,14 +929,12 @@ void ReadData::header(int firstpass)
 
     // search line for header keyword and set corresponding variable
     // customize for new header lines
+    // check for triangles before angles so "triangles" not matched as "angles"
 
     if (strstr(line,"atoms")) {
       sscanf(line,BIGINT_FORMAT,&natoms);
       if (addflag == NONE) atom->natoms = natoms;
       else if (firstpass) atom->natoms += natoms;
-
-    // check for these first
-    // otherwise "triangles" will be matched as "angles"
 
     } else if (strstr(line,"ellipsoids")) {
       if (!avec_ellipsoid)
@@ -902,7 +975,13 @@ void ReadData::header(int firstpass)
     } else if (strstr(line,"atom types")) {
       sscanf(line,"%d",&ntypes);
       if (addflag == NONE) atom->ntypes = ntypes + extra_atom_types;
-    } else if (strstr(line,"bond types")) {
+    } else if (strstr(line,"mol_H types")){
+
+        // Number of molecule types in Coarse-grain regions,  USER-HADRESS Package
+
+        sscanf(line,"%d",&atom->nmoltypesH);
+    }
+    else if (strstr(line,"bond types")) {
       sscanf(line,"%d",&nbondtypes);
       if (addflag == NONE) atom->nbondtypes = nbondtypes + extra_bond_types;
     } else if (strstr(line,"angle types")) {
@@ -1577,7 +1656,7 @@ void ReadData::mass()
   for (int i = 0; i < ntypes; i++) {
     next = strchr(buf,'\n');
     *next = '\0';
-    atom->set_mass(buf,toffset);
+    atom->set_mass(FLERR,buf,toffset);
     buf = next + 1;
   }
   delete [] original;
@@ -1635,6 +1714,8 @@ void ReadData::pairIJcoeffs()
 
 void ReadData::bondcoeffs()
 {
+  if (!nbondtypes) return;
+
   char *next;
   char *buf = new char[nbondtypes*MAXLINE];
 
@@ -1657,6 +1738,8 @@ void ReadData::bondcoeffs()
 
 void ReadData::anglecoeffs(int which)
 {
+  if (!nangletypes) return;
+
   char *next;
   char *buf = new char[nangletypes*MAXLINE];
 
@@ -1681,6 +1764,8 @@ void ReadData::anglecoeffs(int which)
 
 void ReadData::dihedralcoeffs(int which)
 {
+  if (!ndihedraltypes) return;
+
   char *next;
   char *buf = new char[ndihedraltypes*MAXLINE];
 
@@ -1708,6 +1793,8 @@ void ReadData::dihedralcoeffs(int which)
 
 void ReadData::impropercoeffs(int which)
 {
+  if (!nimpropertypes) return;
+
   char *next;
   char *buf = new char[nimpropertypes*MAXLINE];
 

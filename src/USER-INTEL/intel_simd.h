@@ -37,10 +37,28 @@ authors for more details.
 
 namespace ip_simd {
 
-  typedef __m512i SIMD_int;
   typedef __mmask16 SIMD_mask;
-  typedef __m512 SIMD_float;
-  typedef __m512d SIMD_double;
+
+  struct SIMD_int {
+    __m512i v;
+    SIMD_int() {}
+    SIMD_int(const __m512i in) : v(in) {} 
+    operator __m512i() const { return v;}
+  };
+
+  struct SIMD_float {
+    __m512 v;
+    SIMD_float() {}
+    SIMD_float(const __m512 in) : v(in) {} 
+    operator __m512() const { return v;}
+  };
+
+  struct SIMD_double {
+    __m512d v;
+    SIMD_double() {}
+    SIMD_double(const __m512d in) : v(in) {} 
+    operator __m512d() const { return v;}
+  };
 
   template<class flt_t> 
   class SIMD_type {
@@ -176,6 +194,37 @@ namespace ip_simd {
 				      _MM_SCALE_8);
   }
 
+  template <typename T>
+  inline SIMD_int SIMD_gatherz_offset(const SIMD_mask &m, const int *p,
+				      const SIMD_int &i) {
+  }
+
+  template <>
+  inline SIMD_int SIMD_gatherz_offset<float>(const SIMD_mask &m, const int *p,
+					     const SIMD_int &i) {
+    return _mm512_mask_i32gather_epi32( _mm512_set1_epi32(0), m, i, p,
+				       _MM_SCALE_4);
+  }
+
+  template <>
+  inline SIMD_int SIMD_gatherz_offset<double>(const SIMD_mask &m, const int *p,
+					      const SIMD_int &i) {
+    return _mm512_mask_i32gather_epi32( _mm512_set1_epi32(0), m, i, p,
+				       _MM_SCALE_8);
+  }
+
+  inline SIMD_float SIMD_gatherz(const SIMD_mask &m, const float *p,
+				 const SIMD_int &i) {
+    return _mm512_mask_i32gather_ps( _mm512_set1_ps((float)0), m, i, p,
+				    _MM_SCALE_4);
+  }
+
+  inline SIMD_double SIMD_gatherz(const SIMD_mask &m, const double *p,
+				  const SIMD_int &i) {
+    return _mm512_mask_i32logather_pd( _mm512_set1_pd(0.0), m, i, p,
+				      _MM_SCALE_8);
+  }
+
   // ------- Store Operations
   
   inline void SIMD_store(int *p, const SIMD_int &one) {
@@ -276,6 +325,18 @@ namespace ip_simd {
     return _mm512_mask_sub_pd(s,m,one,two);
   }
 
+  inline SIMD_int operator-(const SIMD_int &one) {
+    return _mm512_sub_epi32(SIMD_set((int)0),one);
+  }
+  
+  inline SIMD_float operator-(const SIMD_float &one) {
+    return _mm512_sub_ps(SIMD_set((float)0),one);
+  }
+  
+  inline SIMD_double operator-(const SIMD_double &one) {
+    return _mm512_sub_pd(SIMD_set((double)0),one);
+  }
+
   inline SIMD_int operator-(const SIMD_int &one, const SIMD_int &two) {
     return _mm512_sub_epi32(one,two);
   }
@@ -355,19 +416,35 @@ namespace ip_simd {
   // ------- SVML operations  
 
   inline SIMD_float SIMD_rcp(const SIMD_float &one) {
+    #ifdef __AVX512ER__
     return _mm512_rcp28_ps(one);
+    #else
+    return _mm512_recip_ps(one);
+    #endif
   }
 
   inline SIMD_double SIMD_rcp(const SIMD_double &one) {
+    #ifdef __AVX512ER__
     return _mm512_rcp28_pd(one);
+    #else
+    return _mm512_recip_pd(one);
+    #endif
   }
 
   inline SIMD_float SIMD_rcpz(const SIMD_mask &m, const SIMD_float &one) {
+    #ifdef __AVX512ER__
     return _mm512_maskz_rcp28_ps(m, one);
+    #else
+    return _mm512_mask_recip_ps(_mm512_set1_ps(0), m, one);
+    #endif
   }
 
   inline SIMD_double SIMD_rcpz(const SIMD_mask &m, const SIMD_double &one) {
+    #ifdef __AVX512ER__
     return _mm512_maskz_rcp28_pd(m, one);
+    #else
+    return _mm512_mask_recip_pd(_mm512_set1_pd(0), m, one);
+    #endif
   }
 
   inline SIMD_float SIMD_sqrt(const SIMD_float &one) {
@@ -376,6 +453,22 @@ namespace ip_simd {
 
   inline SIMD_double SIMD_sqrt(const SIMD_double &one) {
     return _mm512_sqrt_pd(one);
+  }
+
+  inline SIMD_float SIMD_invsqrt(const SIMD_float &one) {
+    #ifdef __AVX512ER__
+    return _mm512_rsqrt28_ps(one);
+    #else
+    return _mm512_invsqrt_ps(one);
+    #endif
+  }
+
+  inline SIMD_double SIMD_invsqrt(const SIMD_double &one) {
+    #ifdef __AVX512ER__
+    return _mm512_rsqrt28_pd(one);
+    #else
+    return _mm512_invsqrt_pd(one);
+    #endif
   }
 
   inline SIMD_float SIMD_pow(const SIMD_float &one, const SIMD_float &two) {
@@ -662,17 +755,17 @@ namespace ip_simd {
   
   // -------- I/O operations
 
-  inline void SIMD_print(const SIMD_int &vec) {
+  inline void SIMD_print(const __m512i &vec) {
     for (int i = 0; i < 16; i++) 
       printf("%d ",(*((int*)&(vec) + (i))));
   }
 
-  inline void SIMD_print(const SIMD_float &vec) {
+  inline void SIMD_print(const __m512 &vec) {
     for (int i = 0; i < 16; i++) 
       printf("%f ",(*((float*)&(vec) + (i))));
   }
 
-  inline void SIMD_print(const SIMD_double &vec) {
+  inline void SIMD_print(const __m512d &vec) {
     for (int i = 0; i < 8; i++) 
       printf("%f ",(*((double*)&(vec) + (i))));
   }
@@ -934,9 +1027,36 @@ namespace ip_simd {
     _mm512_mask_i32scatter_ps(force+2, m, i, jfrc, _MM_SCALE_1);
   }
 
+  template <class ft>
+  inline void SIMD_scalar_update(const int jj, const int* ejnum, ft *force,
+				 const int* i, const double *fx,
+				 const double *fy, const double *fz,
+				 const double *fx2, const double *fy2,
+				 const double *fz2) {
+    #pragma novector
+    for (int k=0; k<8; k++) {
+      if (jj < ejnum[k]) {
+	const int j = i[k];
+	force[j].x -= fx[k];
+	force[j].y -= fy[k];
+	force[j].z -= fz[k];
+      }
+    }
+    
+    #pragma novector
+    for (int k=8; k<16; k++) {
+      if (jj < ejnum[k]) {
+	const int j = i[k];
+	force[j].x -= fx2[k-8];
+	force[j].y -= fy2[k-8];
+	force[j].z -= fz2[k-8];
+      }
+    }
+  }
+
   inline void SIMD_jforce_update(const SIMD_mask &m, double *force,
 				 const SIMD_int &i, const SIMD_double &fx,
-				 const SIMD_double &fy, const SIMD_double &fz) {
+				 const SIMD_double &fy, const SIMD_double &fz)   {
     SIMD_double jfrc;
     jfrc = _mm512_mask_i32logather_pd(_mm512_undefined_pd(), m, i, force, 
 				      _MM_SCALE_2);

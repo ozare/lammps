@@ -12,7 +12,8 @@
 ------------------------------------------------------------------------- */
 
 /* ----------------------------------------------------------------------
-   Contributing author: Rodrigo Canales (RWTH Aachen University)
+   Contributing authors: Rodrigo Canales (RWTH Aachen University)
+                         W. Michael Brown (Intel)
 ------------------------------------------------------------------------- */
 
 #ifdef KSPACE_CLASS
@@ -35,6 +36,13 @@ class PPPMIntel : public PPPM {
   virtual ~PPPMIntel();
   virtual void init();
   virtual void compute(int, int);
+  void compute_first(int, int);
+  void compute_second(int, int);
+  void pack_buffers();
+
+  #ifdef _LMP_INTEL_OFFLOAD
+  int use_base();
+  #endif
 
  protected:
   FixIntel *fix;
@@ -49,6 +57,8 @@ class PPPMIntel : public PPPM {
   void make_rho(IntelBuffers<flt_t,acc_t> *buffers);
   template<class flt_t, class acc_t>
   void fieldforce_ik(IntelBuffers<flt_t,acc_t> *buffers);
+  template<class flt_t, class acc_t>
+  void fieldforce_ad(IntelBuffers<flt_t,acc_t> *buffers);
 };
 
 }

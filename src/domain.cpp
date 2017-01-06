@@ -105,6 +105,15 @@ Domain::Domain(LAMMPS *lmp) : Pointers(lmp)
   regions = NULL;
 
   copymode = 0;
+
+  region_map = new RegionCreatorMap();
+
+#define REGION_CLASS
+#define RegionStyle(key,Class) \
+  (*region_map)[#key] = &region_creator<Class>;
+#include "style_region.h"
+#undef RegionStyle
+#undef REGION_CLASS
 }
 
 /* ---------------------------------------------------------------------- */
@@ -116,6 +125,8 @@ Domain::~Domain()
   delete lattice;
   for (int i = 0; i < nregion; i++) delete regions[i];
   memory->sfree(regions);
+
+  delete region_map;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -168,7 +179,7 @@ void Domain::set_initial_box(int expandflag)
   // error checks for orthogonal and triclinic domains
 
   if (boxlo[0] >= boxhi[0] || boxlo[1] >= boxhi[1] || boxlo[2] >= boxhi[2])
-    error->one(FLERR,"Box bounds are invalid");
+    error->one(FLERR,"Box bounds are invalid or missing");
 
   if (domain->dimension == 2 && (xz != 0.0 || yz != 0.0))
     error->all(FLERR,"Cannot skew triclinic box in z for 2d simulation");
@@ -927,28 +938,31 @@ void Domain::subbox_too_small_check(double thresh)
 }
 
 /* ----------------------------------------------------------------------
-   minimum image convention
+   minimum image convention in periodic dimensions
    use 1/2 of box size as test
    for triclinic, also add/subtract tilt factors in other dims as needed
+   changed "if" to "while" to enable distance to
+     far-away ghost atom returned by atom->map() to be wrapped back into box
+     could be problem for looking up atom IDs when cutoff > boxsize
 ------------------------------------------------------------------------- */
 
 void Domain::minimum_image(double &dx, double &dy, double &dz)
 {
   if (triclinic == 0) {
     if (xperiodic) {
-      if (fabs(dx) > xprd_half) {
+      while (fabs(dx) > xprd_half) {
         if (dx < 0.0) dx += xprd;
         else dx -= xprd;
       }
     }
     if (yperiodic) {
-      if (fabs(dy) > yprd_half) {
+      while (fabs(dy) > yprd_half) {
         if (dy < 0.0) dy += yprd;
         else dy -= yprd;
       }
     }
     if (zperiodic) {
-      if (fabs(dz) > zprd_half) {
+      while (fabs(dz) > zprd_half) {
         if (dz < 0.0) dz += zprd;
         else dz -= zprd;
       }
@@ -956,7 +970,7 @@ void Domain::minimum_image(double &dx, double &dy, double &dz)
 
   } else {
     if (zperiodic) {
-      if (fabs(dz) > zprd_half) {
+      while (fabs(dz) > zprd_half) {
         if (dz < 0.0) {
           dz += zprd;
           dy += yz;
@@ -969,7 +983,7 @@ void Domain::minimum_image(double &dx, double &dy, double &dz)
       }
     }
     if (yperiodic) {
-      if (fabs(dy) > yprd_half) {
+      while (fabs(dy) > yprd_half) {
         if (dy < 0.0) {
           dy += yprd;
           dx += xy;
@@ -980,7 +994,7 @@ void Domain::minimum_image(double &dx, double &dy, double &dz)
       }
     }
     if (xperiodic) {
-      if (fabs(dx) > xprd_half) {
+      while (fabs(dx) > xprd_half) {
         if (dx < 0.0) dx += xprd;
         else dx -= xprd;
       }
@@ -989,28 +1003,31 @@ void Domain::minimum_image(double &dx, double &dy, double &dz)
 }
 
 /* ----------------------------------------------------------------------
-   minimum image convention
+   minimum image convention in periodic dimensions
    use 1/2 of box size as test
    for triclinic, also add/subtract tilt factors in other dims as needed
+   changed "if" to "while" to enable distance to
+     far-away ghost atom returned by atom->map() to be wrapped back into box
+     could be problem for looking up atom IDs when cutoff > boxsize
 ------------------------------------------------------------------------- */
 
 void Domain::minimum_image(double *delta)
 {
   if (triclinic == 0) {
     if (xperiodic) {
-      if (fabs(delta[0]) > xprd_half) {
+      while (fabs(delta[0]) > xprd_half) {
         if (delta[0] < 0.0) delta[0] += xprd;
         else delta[0] -= xprd;
       }
     }
     if (yperiodic) {
-      if (fabs(delta[1]) > yprd_half) {
+      while (fabs(delta[1]) > yprd_half) {
         if (delta[1] < 0.0) delta[1] += yprd;
         else delta[1] -= yprd;
       }
     }
     if (zperiodic) {
-      if (fabs(delta[2]) > zprd_half) {
+      while (fabs(delta[2]) > zprd_half) {
         if (delta[2] < 0.0) delta[2] += zprd;
         else delta[2] -= zprd;
       }
@@ -1018,7 +1035,7 @@ void Domain::minimum_image(double *delta)
 
   } else {
     if (zperiodic) {
-      if (fabs(delta[2]) > zprd_half) {
+      while (fabs(delta[2]) > zprd_half) {
         if (delta[2] < 0.0) {
           delta[2] += zprd;
           delta[1] += yz;
@@ -1031,7 +1048,7 @@ void Domain::minimum_image(double *delta)
       }
     }
     if (yperiodic) {
-      if (fabs(delta[1]) > yprd_half) {
+      while (fabs(delta[1]) > yprd_half) {
         if (delta[1] < 0.0) {
           delta[1] += yprd;
           delta[0] += xy;
@@ -1042,7 +1059,7 @@ void Domain::minimum_image(double *delta)
       }
     }
     if (xperiodic) {
-      if (fabs(delta[0]) > xprd_half) {
+      while (fabs(delta[0]) > xprd_half) {
         if (delta[0] < 0.0) delta[0] += xprd;
         else delta[0] -= xprd;
       }
@@ -1087,6 +1104,9 @@ int Domain::closest_image(int i, int j)
 /* ----------------------------------------------------------------------
    find and return Xj image = periodic image of Xj that is closest to Xi
    for triclinic, add/subtract tilt factors in other dims as needed
+   not currently used (Jan 2017):
+     used to be called by pair TIP4P styles but no longer,
+       due to use of other closest_image() method
 ------------------------------------------------------------------------- */
 
 void Domain::closest_image(const double * const xi, const double * const xj,
@@ -1486,6 +1506,84 @@ void Domain::image_flip(int m, int n, int p)
 }
 
 /* ----------------------------------------------------------------------
+   return 1 if this proc owns atom with coords x, else return 0
+   x is returned remapped into periodic box
+   if image flag is passed, flag is updated via remap(x,image)
+   if image = NULL is passed, no update with remap(x) 
+   if shrinkexceed, atom can be outside shrinkwrap boundaries
+   called from create_atoms() in library.cpp
+------------------------------------------------------------------------- */
+
+int Domain::ownatom(int id, double *x, imageint *image, int shrinkexceed)
+{
+  double lamda[3];
+  double *coord,*blo,*bhi,*slo,*shi;
+  
+  if (image) remap(x,*image);
+  else remap(x);
+
+  if (triclinic) {
+    x2lamda(x,lamda);
+    coord = lamda;
+  } else coord = x;
+
+  // box and subbox bounds for orthogonal vs triclinic
+
+  if (triclinic == 0) {
+    blo = boxlo;
+    bhi = boxhi;
+    slo = sublo;
+    shi = subhi;
+  } else {
+    blo = boxlo_lamda;
+    bhi = boxhi_lamda;
+    slo = sublo_lamda;
+    shi = subhi_lamda;
+  }
+
+  if (coord[0] >= slo[0] && coord[0] < shi[0] &&
+      coord[1] >= slo[1] && coord[1] < shi[1] &&
+      coord[2] >= slo[2] && coord[2] < shi[2]) return 1;
+
+  // check if atom did not return 1 only b/c it was 
+  //   outside a shrink-wrapped boundary
+
+  if (shrinkexceed) {
+    int outside = 0;
+    if (coord[0] < blo[0] && boundary[0][0] > 1) outside = 1;
+    if (coord[0] >= bhi[0] && boundary[0][1] > 1) outside = 1;
+    if (coord[1] < blo[1] && boundary[1][0] > 1) outside = 1;
+    if (coord[1] >= bhi[1] && boundary[1][1] > 1) outside = 1;
+    if (coord[2] < blo[2] && boundary[2][0] > 1) outside = 1;
+    if (coord[2] >= bhi[2] && boundary[2][1] > 1) outside = 1;
+    if (!outside) return 0;
+
+    // newcoord = coords pushed back to be on shrink-wrapped boundary
+    // newcoord is a copy, so caller's x[] is not affected
+
+    double newcoord[3];
+    if (coord[0] < blo[0] && boundary[0][0] > 1) newcoord[0] = blo[0];
+    else if (coord[0] >= bhi[0] && boundary[0][1] > 1) newcoord[0] = bhi[0];
+    else newcoord[0] = coord[0];
+    if (coord[1] < blo[1] && boundary[1][1] > 1) newcoord[1] = blo[1];
+    else if (coord[1] >= bhi[1] && boundary[1][1] > 1) newcoord[1] = bhi[1];
+    else newcoord[1] = coord[1];
+    if (coord[2] < blo[2] && boundary[2][2] > 1) newcoord[2] = blo[2];
+    else if (coord[2] >= bhi[2] && boundary[2][1] > 1) newcoord[2] = bhi[2];
+    else newcoord[2] = coord[2];
+
+    // re-test for newcoord inside my sub-domain
+    // use <= test for upper-boundary since may have just put atom at boxhi
+
+    if (newcoord[0] >= slo[0] && newcoord[0] <= shi[0] &&
+        newcoord[1] >= slo[1] && newcoord[1] <= shi[1] &&
+        newcoord[2] >= slo[2] && newcoord[2] <= shi[2]) return 1;
+  }
+
+  return 0;
+}
+
+/* ----------------------------------------------------------------------
    create a lattice
 ------------------------------------------------------------------------- */
 
@@ -1524,51 +1622,33 @@ void Domain::add_region(int narg, char **arg)
     if (lmp->suffix) {
       char estyle[256];
       sprintf(estyle,"%s/%s",arg[1],lmp->suffix);
-
-      if (0) return;
-
-#define REGION_CLASS
-#define RegionStyle(key,Class) \
-      else if (strcmp(estyle,#key) == 0) { \
-            regions[nregion] = new Class(lmp,narg,arg); \
-            regions[nregion]->init(); \
-            nregion++; \
-            return; \
+      if (region_map->find(estyle) != region_map->end()) {
+        RegionCreator region_creator = (*region_map)[estyle];
+        regions[nregion] = region_creator(lmp, narg, arg);
+        regions[nregion]->init();
+        nregion++;
+        return;
       }
-#include "style_region.h"
-#undef RegionStyle
-#undef REGION_CLASS
     }
 
     if (lmp->suffix2) {
       char estyle[256];
       sprintf(estyle,"%s/%s",arg[1],lmp->suffix2);
-
-      if (0) return;
-
-#define REGION_CLASS
-#define RegionStyle(key,Class) \
-      else if (strcmp(estyle,#key) == 0) { \
-            regions[nregion] = new Class(lmp,narg,arg); \
-            regions[nregion]->init(); \
-            nregion++; \
-            return; \
+      if (region_map->find(estyle) != region_map->end()) {
+        RegionCreator region_creator = (*region_map)[estyle];
+        regions[nregion] = region_creator(lmp, narg, arg);
+        regions[nregion]->init();
+        nregion++;
+        return;
       }
-#include "style_region.h"
-#undef RegionStyle
-#undef REGION_CLASS
     }
   }
 
   if (strcmp(arg[1],"none") == 0) error->all(FLERR,"Unknown region style");
-
-#define REGION_CLASS
-#define RegionStyle(key,Class) \
-  else if (strcmp(arg[1],#key) == 0) \
-    regions[nregion] = new Class(lmp,narg,arg);
-#include "style_region.h"
-#undef REGION_CLASS
-
+  if (region_map->find(arg[1]) != region_map->end()) {
+    RegionCreator region_creator = (*region_map)[arg[1]];
+    regions[nregion] = region_creator(lmp, narg, arg);
+  }
   else error->all(FLERR,"Unknown region style");
 
   // initialize any region variables via init()
@@ -1576,6 +1656,16 @@ void Domain::add_region(int narg, char **arg)
 
   regions[nregion]->init();
   nregion++;
+}
+
+/* ----------------------------------------------------------------------
+   one instance per region style in style_region.h
+------------------------------------------------------------------------- */
+
+template <typename T>
+Region *Domain::region_creator(LAMMPS *lmp, int narg, char ** arg)
+{
+  return new T(lmp, narg, arg);
 }
 
 /* ----------------------------------------------------------------------
@@ -1912,7 +2002,7 @@ void Domain::subbox_corners()
 
 /* ----------------------------------------------------------------------
    compute 8 corner pts of any triclinic box with lo/hi in lamda coords
-   8 output conners are ordered with x changing fastest, then y, finally z
+   8 output corners are ordered with x changing fastest, then y, finally z
    could be more efficient if just coded with xy,yz,xz explicitly
 ------------------------------------------------------------------------- */
 
@@ -1935,5 +2025,3 @@ void Domain::lamda_box_corners(double *lo, double *hi)
   corners[7][0] = hi[0]; corners[7][1] = hi[1]; corners[7][2] = subhi_lamda[2];
   lamda2x(corners[7],corners[7]);
 }
-
-

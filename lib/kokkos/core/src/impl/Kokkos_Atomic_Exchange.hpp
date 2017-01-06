@@ -1,13 +1,13 @@
 /*
 //@HEADER
 // ************************************************************************
-// 
+//
 //                        Kokkos v. 2.0
 //              Copyright (2014) Sandia Corporation
-// 
+//
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -36,7 +36,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Questions? Contact  H. Carter Edwards (hcedwar@sandia.gov)
-// 
+//
 // ************************************************************************
 //@HEADER
 */
@@ -106,12 +106,14 @@ T atomic_exchange( volatile T * const dest ,
 {
   T return_val;
   // This is a way to (hopefully) avoid dead lock in a warp
-  bool done = false;
-  while (! done ) {
+  int done = 1;
+  while ( done > 0 ) {
+    done++;
     if( Impl::lock_address_cuda_space( (void*) dest ) ) {
       return_val = *dest;
       *dest = val;
       Impl::unlock_address_cuda_space( (void*) dest );
+      done = 0;
     }
   }
   return return_val;
@@ -186,7 +188,7 @@ T atomic_exchange( volatile T * const dest ,
   return old.val_T ;
 }
 
-#if defined(KOKKOS_ENABLE_ASM)
+#if defined(KOKKOS_ENABLE_ASM) && defined ( KOKKOS_USE_ISA_X86_64 )
 template< typename T >
 KOKKOS_INLINE_FUNCTION
 T atomic_exchange( volatile T * const dest ,
@@ -219,14 +221,24 @@ T atomic_exchange( volatile T * const dest ,
     typename ::Kokkos::Impl::enable_if<
                   ( sizeof(T) != 4 )
                && ( sizeof(T) != 8 )
-              #if defined(KOKKOS_ENABLE_ASM)
+              #if defined(KOKKOS_ENABLE_ASM) && defined ( KOKKOS_USE_ISA_X86_64 )
                && ( sizeof(T) != 16 )
               #endif
                  , const T >::type& val )
 {
   while( !Impl::lock_address_host_space( (void*) dest ) );
   T return_val = *dest;
-  const T tmp = *dest = val;
+  // Don't use the following line of code here:
+  //
+  //const T tmp = *dest = val;
+  //
+  // Instead, put each assignment in its own statement.  This is
+  // because the overload of T::operator= for volatile *this should
+  // return void, not volatile T&.  See Kokkos #177:
+  //
+  // https://github.com/kokkos/kokkos/issues/177
+  *dest = val;
+  const T tmp = *dest;
   #ifndef KOKKOS_COMPILER_CLANG
   (void) tmp;
   #endif
@@ -264,7 +276,7 @@ void atomic_assign( volatile T * const dest ,
   } while ( assumed != old.val_type );
 }
 
-#ifdef KOKKOS_ENABLE_ASM
+#if defined( KOKKOS_ENABLE_ASM ) && defined ( KOKKOS_USE_ISA_X86_64 )
 template< typename T >
 KOKKOS_INLINE_FUNCTION
 void atomic_assign( volatile T * const dest ,
@@ -292,13 +304,20 @@ void atomic_assign( volatile T * const dest ,
     typename ::Kokkos::Impl::enable_if<
                   ( sizeof(T) != 4 )
                && ( sizeof(T) != 8 )
-              #if defined(KOKKOS_ENABLE_ASM)
+              #if defined(KOKKOS_ENABLE_ASM) && defined ( KOKKOS_USE_ISA_X86_64 )
                && ( sizeof(T) != 16 )
               #endif
                  , const T >::type& val )
 {
   while( !Impl::lock_address_host_space( (void*) dest ) );
+  // This is likely an aggregate type with a defined
+  // 'volatile T & operator = ( const T & ) volatile'
+  // member.  The volatile return value implicitly defines a
+  // dereference that some compilers (gcc 4.7.2) warn is being ignored.
+  // Suppress warning by casting return to void.
+  //(void)( *dest = val );
   *dest = val;
+
   Impl::unlock_address_host_space( (void*) dest );
 }
 //----------------------------------------------------------------------------

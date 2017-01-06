@@ -34,15 +34,14 @@
 #include "update.h"
 #include "modify.h"
 #include "compute.h"
-#include "accelerator_cuda.h"
 #include "suffix.h"
 #include "atom_masks.h"
 #include "memory.h"
+#include "math_const.h"
 #include "error.h"
 
 using namespace LAMMPS_NS;
-
-#define EWALD_F 1.12837917
+using namespace MathConst;
 
 enum{NONE,RLINEAR,RSQ,BMP};
 
@@ -55,8 +54,6 @@ int Pair::instance_total = 0;
 Pair::Pair(LAMMPS *lmp) : Pointers(lmp)
 {
   instance_me = instance_total++;
-
-  THIRD = 1.0/3.0;
 
   eng_vdwl = eng_coul = 0.0;
 
@@ -90,6 +87,8 @@ Pair::Pair(LAMMPS *lmp) : Pointers(lmp)
   ndisptablebits = 12;
   tabinner = sqrt(2.0);
   tabinner_disp = sqrt(2.0);
+  ftable = NULL;
+  fdisptable = NULL;
 
   allocated = 0;
   suffix_flag = Suffix::NONE;
@@ -101,10 +100,7 @@ Pair::Pair(LAMMPS *lmp) : Pointers(lmp)
   num_tally_compute = 0;
   list_tally_compute = NULL;
 
-  // CUDA and KOKKOS per-fix data masks
-
-  datamask = ALL_MASK;
-  datamask_ext = ALL_MASK;
+  // KOKKOS per-fix data masks
 
   execution_space = Host;
   datamask_read = ALL_MASK;
@@ -118,7 +114,7 @@ Pair::Pair(LAMMPS *lmp) : Pointers(lmp)
 Pair::~Pair()
 {
   num_tally_compute = 0;
-  memory->sfree((void *)list_tally_compute);
+  memory->sfree((void *) list_tally_compute);
   list_tally_compute = NULL;
 
   if (copymode) return;
@@ -201,9 +197,11 @@ void Pair::init()
   if (tail_flag && domain->nonperiodic && comm->me == 0)
     error->warning(FLERR,"Using pair tail corrections with nonperiodic system");
   if (!compute_flag && tail_flag)
-    error->warning(FLERR,"Using pair tail corrections with pair_modify compute no");
+    error->warning(FLERR,"Using pair tail corrections with "
+                   "pair_modify compute no");
   if (!compute_flag && offset_flag)
-    error->warning(FLERR,"Using pair potential shift with pair_modify compute no");
+    error->warning(FLERR,"Using pair potential shift with "
+                   "pair_modify compute no");
 
   // for manybody potentials
   // check if bonded exclusions could invalidate the neighbor list
@@ -385,7 +383,7 @@ void Pair::init_tables(double cut_coul, double *cut_respa)
         ftable[i] = qqrd2e/r * fgamma;
         etable[i] = qqrd2e/r * egamma;
       } else {
-        ftable[i] = qqrd2e/r * (derfc + EWALD_F*grij*expm2);
+        ftable[i] = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2);
         etable[i] = qqrd2e/r * derfc;
       }
     } else {
@@ -397,9 +395,9 @@ void Pair::init_tables(double cut_coul, double *cut_respa)
         etable[i] = qqrd2e/r * egamma;
         vtable[i] = qqrd2e/r * fgamma;
       } else {
-        ftable[i] = qqrd2e/r * (derfc + EWALD_F*grij*expm2 - 1.0);
+        ftable[i] = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2 - 1.0);
         etable[i] = qqrd2e/r * derfc;
-        vtable[i] = qqrd2e/r * (derfc + EWALD_F*grij*expm2);
+        vtable[i] = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2);
       }
       if (rsq_lookup.f > cut_respa[2]*cut_respa[2]) {
         if (rsq_lookup.f < cut_respa[3]*cut_respa[3]) {
@@ -408,7 +406,7 @@ void Pair::init_tables(double cut_coul, double *cut_respa)
           ctable[i] = qqrd2e/r * rsw*rsw*(3.0 - 2.0*rsw);
         } else {
           if (msmflag) ftable[i] = qqrd2e/r * fgamma;
-          else ftable[i] = qqrd2e/r * (derfc + EWALD_F*grij*expm2);
+          else ftable[i] = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2);
           ctable[i] = qqrd2e/r;
         }
       }
@@ -481,7 +479,7 @@ void Pair::init_tables(double cut_coul, double *cut_respa)
         f_tmp = qqrd2e/r * fgamma;
         e_tmp = qqrd2e/r * egamma;
       } else {
-        f_tmp = qqrd2e/r * (derfc + EWALD_F*grij*expm2);
+        f_tmp = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2);
         e_tmp = qqrd2e/r * derfc;
       }
     } else {
@@ -492,9 +490,9 @@ void Pair::init_tables(double cut_coul, double *cut_respa)
         e_tmp = qqrd2e/r * egamma;
         v_tmp = qqrd2e/r * fgamma;
       } else {
-        f_tmp = qqrd2e/r * (derfc + EWALD_F*grij*expm2 - 1.0);
+        f_tmp = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2 - 1.0);
         e_tmp = qqrd2e/r * derfc;
-        v_tmp = qqrd2e/r * (derfc + EWALD_F*grij*expm2);
+        v_tmp = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2);
       }
       if (rsq_lookup.f > cut_respa[2]*cut_respa[2]) {
         if (rsq_lookup.f < cut_respa[3]*cut_respa[3]) {
@@ -503,7 +501,7 @@ void Pair::init_tables(double cut_coul, double *cut_respa)
           c_tmp = qqrd2e/r * rsw*rsw*(3.0 - 2.0*rsw);
         } else {
           if (msmflag) f_tmp = qqrd2e/r * fgamma;
-          else f_tmp = qqrd2e/r * (derfc + EWALD_F*grij*expm2);
+          else f_tmp = qqrd2e/r * (derfc + MY_ISPI4*grij*expm2);
           c_tmp = qqrd2e/r;
         }
       }
@@ -812,8 +810,6 @@ void Pair::ev_setup(int eflag, int vflag)
     if (vflag_atom == 0) vflag_either = 0;
     if (vflag_either == 0 && eflag_either == 0) evflag = 0;
   } else vflag_fdotr = 0;
-
-  if (lmp->cuda) lmp->cuda->evsetup_eatom_vatom(eflag_atom,vflag_atom);
 }
 
 /* ----------------------------------------------------------------------

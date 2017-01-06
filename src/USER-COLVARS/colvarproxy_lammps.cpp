@@ -9,6 +9,8 @@
 #include "fix_colvars.h"
 
 #include "colvarmodule.h"
+#include "colvar.h"
+#include "colvarbias.h"
 #include "colvaratoms.h"
 #include "colvarproxy.h"
 #include "colvarproxy_lammps.h"
@@ -71,7 +73,7 @@ colvarproxy_lammps::colvarproxy_lammps(LAMMPS_NS::LAMMPS *lmp,
   _random = new LAMMPS_NS::RanPark(lmp,seed);
 
   first_timestep=true;
-  system_force_requested=false;
+  total_force_requested=false;
   previous_step=-1;
   t_target=temp;
   do_exit=false;
@@ -109,11 +111,20 @@ colvarproxy_lammps::colvarproxy_lammps(LAMMPS_NS::LAMMPS *lmp,
   if (restart_output_prefix_str.rfind(".*") != std::string::npos)
     restart_output_prefix_str.erase(restart_output_prefix_str.rfind(".*"),2);
 
+#if defined(_OPENMP)
+  if (smp_thread_id() == 0) {
+    omp_init_lock(&smp_lock_state);
+  }
+#endif
+
   // initialize multi-replica support, if available
   if (replica_enabled()) {
     MPI_Comm_rank(inter_comm, &inter_me);
     MPI_Comm_size(inter_comm, &inter_num);
   }
+
+  if (cvm::debug())
+    log("Done initializing the colvars proxy object.\n");
 }
 
 
@@ -143,7 +154,6 @@ void colvarproxy_lammps::init(const char *conf_file)
     log("atoms_ids = "+cvm::to_str(atoms_ids)+"\n");
     log("atoms_ncopies = "+cvm::to_str(atoms_ncopies)+"\n");
     log("atoms_positions = "+cvm::to_str(atoms_positions)+"\n");
-    log("atoms_applied_forces = "+cvm::to_str(atoms_applied_forces)+"\n");
     log(cvm::line_marker);
     log("Info: done initializing the colvars proxy object.\n");
   }
@@ -183,18 +193,13 @@ double colvarproxy_lammps::compute()
   previous_step = _lmp->update->ntimestep;
 
   if (cvm::debug()) {
-    cvm::log(cvm::line_marker+
+    cvm::log(std::string(cvm::line_marker)+
              "colvarproxy_lammps, step no. "+cvm::to_str(colvars->it)+"\n"+
              "Updating internal data.\n");
   }
 
-  // backup applied forces if necessary to calculate system forces
-  if (system_force_requested) {
-    atoms_applied_forces = atoms_new_colvar_forces;
-  }
-
   // zero the forces on the atoms, so that they can be accumulated by the colvars
-  for (size_t i = 0; i < atoms_applied_forces.size(); i++) {
+  for (size_t i = 0; i < atoms_new_colvar_forces.size(); i++) {
     atoms_new_colvar_forces[i].reset();
   }
 
@@ -294,9 +299,9 @@ void colvarproxy_lammps::error(std::string const &message)
 void colvarproxy_lammps::fatal_error(std::string const &message)
 {
   log(message);
-  if (!cvm::debug())
-    log("If this error message is unclear, try recompiling the "
-         "colvars library and LAMMPS with -DCOLVARS_DEBUG.\n");
+  // if (!cvm::debug())
+  //   log("If this error message is unclear, try recompiling the "
+  //        "colvars library and LAMMPS with -DCOLVARS_DEBUG.\n");
 
   _lmp->error->one(FLERR,
                    "Fatal error in the collective variables module.\n");
@@ -319,6 +324,83 @@ int colvarproxy_lammps::backup_file(char const *filename)
     return my_backup_file(filename, ".BAK");
   }
 }
+
+
+#if defined(_OPENMP)
+
+
+// SMP support
+
+int colvarproxy_lammps::smp_enabled()
+{
+  if (b_smp_active) {
+    return COLVARS_OK;
+  }
+  return COLVARS_ERROR;
+}
+
+
+int colvarproxy_lammps::smp_colvars_loop()
+{
+  colvarmodule *cv = this->colvars;
+#pragma omp parallel for
+  for (size_t i = 0; i < cv->colvars_smp.size(); i++) {
+    if (cvm::debug()) {
+      cvm::log("Calculating colvar \""+cv->colvars_smp[i]->name+"\" on thread "+cvm::to_str(smp_thread_id())+"\n");
+    }
+    cv->colvars_smp[i]->calc_cvcs(cv->colvars_smp_items[i], 1);
+  }
+  return cvm::get_error();
+}
+
+
+int colvarproxy_lammps::smp_biases_loop()
+{
+  colvarmodule *cv = this->colvars;
+#pragma omp parallel for
+  for (size_t i = 0; i < cv->biases.size(); i++) {
+    if (cvm::debug()) {
+      cvm::log("Calculating bias \""+cv->biases[i]->name+"\" on thread "+cvm::to_str(smp_thread_id())+"\n");
+    }
+    cv->biases[i]->update();
+  }
+  return cvm::get_error();
+}
+
+
+int colvarproxy_lammps::smp_thread_id()
+{
+  return omp_get_thread_num();
+}
+
+
+int colvarproxy_lammps::smp_num_threads()
+{
+  return omp_get_max_threads();
+}
+
+
+int colvarproxy_lammps::smp_lock()
+{
+  omp_set_lock(&smp_lock_state);
+  return COLVARS_OK;
+}
+
+
+int colvarproxy_lammps::smp_trylock()
+{
+  return omp_test_lock(&smp_lock_state) ? COLVARS_OK : COLVARS_ERROR;
+}
+
+
+int colvarproxy_lammps::smp_unlock()
+{
+  omp_unset_lock(&smp_lock_state);
+  return COLVARS_OK;
+}
+
+#endif
+
 
 // multi-replica support
 

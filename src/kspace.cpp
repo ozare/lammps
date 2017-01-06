@@ -32,6 +32,7 @@ using namespace LAMMPS_NS;
 
 KSpace::KSpace(LAMMPS *lmp, int narg, char **arg) : Pointers(lmp)
 {
+  order_allocated = 0;
   energy = 0.0;
   virial[0] = virial[1] = virial[2] = virial[3] = virial[4] = virial[5] = 0.0;
 
@@ -88,12 +89,10 @@ KSpace::KSpace(LAMMPS *lmp, int narg, char **arg) : Pointers(lmp)
   eatom = NULL;
   vatom = NULL;
 
-  datamask = ALL_MASK;
-  datamask_ext = ALL_MASK;
-
   execution_space = Host;
   datamask_read = ALL_MASK;
   datamask_modify = ALL_MASK;
+  copymode = 0;
 
   memory->create(gcons,7,7,"kspace:gcons");
   gcons[2][0] = 15.0 / 8.0;
@@ -149,6 +148,8 @@ KSpace::KSpace(LAMMPS *lmp, int narg, char **arg) : Pointers(lmp)
 
 KSpace::~KSpace()
 {
+  if (copymode) return;
+
   memory->destroy(eatom);
   memory->destroy(vatom);
   memory->destroy(gcons);
@@ -307,6 +308,15 @@ double KSpace::estimate_table_accuracy(double q2_over_sqrt, double spr)
 {
   double table_accuracy = 0.0;
   int nctb = force->pair->ncoultablebits;
+  if (comm->me == 0) {
+    char str[128];
+    if (nctb)
+      sprintf(str,"Using %d-bit tables for long-range coulomb",nctb);
+    else
+      sprintf(str,"Using polynomial approximation for long-range coulomb");
+    error->warning(FLERR,str);
+  }
+
   if (nctb) {
     double empirical_precision[17];
     empirical_precision[6] =  6.99E-03;

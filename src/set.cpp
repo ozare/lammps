@@ -430,8 +430,12 @@ void Set::command(int narg, char **arg)
 
     } else if (strcmp(arg[iarg],"dpd/theta") == 0) {
       if (iarg+2 > narg) error->all(FLERR,"Illegal set command");
-      if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) varparse(arg[iarg+1],1);
-      else dvalue = force->numeric(FLERR,arg[iarg+1]);
+      if (strcmp(arg[iarg+1],"NULL") == 0) dvalue = -1.0;
+      else if (strstr(arg[iarg+1],"v_") == arg[iarg+1]) varparse(arg[iarg+1],1);
+      else {
+        dvalue = force->numeric(FLERR,arg[iarg+1]);
+        if (dvalue < 0.0) error->all(FLERR,"Illegal set command");
+      }
       if (!atom->dpd_flag)
         error->all(FLERR,"Cannot set dpd/theta for this atom style");
       set(DPDTHETA);
@@ -494,7 +498,7 @@ void Set::selection(int n)
     if (atom->tag_enable == 0)
       error->all(FLERR,"Cannot use set atom with no atom IDs defined");
     bigint nlobig,nhibig;
-    force->boundsbig(id,MAXTAGINT,nlobig,nhibig);
+    force->boundsbig(FLERR,id,MAXTAGINT,nlobig,nhibig);
 
     tagint *tag = atom->tag;
     for (int i = 0; i < n; i++)
@@ -505,7 +509,7 @@ void Set::selection(int n)
     if (atom->molecule_flag == 0)
       error->all(FLERR,"Cannot use set mol with no molecule IDs defined");
     bigint nlobig,nhibig;
-    force->boundsbig(id,MAXTAGINT,nlobig,nhibig);
+    force->boundsbig(FLERR,id,MAXTAGINT,nlobig,nhibig);
 
     tagint *molecule = atom->molecule;
     for (int i = 0; i < n; i++)
@@ -513,7 +517,7 @@ void Set::selection(int n)
       else select[i] = 0;
 
   } else if (style == TYPE_SELECT) {
-    force->bounds(id,atom->ntypes,nlo,nhi);
+    force->bounds(FLERR,id,atom->ntypes,nlo,nhi);
 
     int *type = atom->type;
     for (int i = 0; i < n; i++)
@@ -632,7 +636,20 @@ void Set::set(int keyword)
       atom->rmass[i] = atom->vfrac[i] * dvalue;
     }
     else if (keyword == SMD_CONTACT_RADIUS) atom->contact_radius[i] = dvalue;
-    else if (keyword == DPDTHETA) atom->dpdTheta[i] = dvalue;
+
+    else if (keyword == DPDTHETA) {
+      if (dvalue >= 0.0) atom->dpdTheta[i] = dvalue;
+      else {
+        double onemass;
+        if (atom->rmass) onemass = atom->rmass[i];
+        else onemass = atom->mass[atom->type[i]];
+        double vx = atom->v[i][0];
+        double vy = atom->v[i][1];
+        double vz = atom->v[i][2];
+        double tfactor = force->mvv2e / (domain->dimension * force->boltz);
+        atom->dpdTheta[i] = tfactor * onemass * (vx*vx + vy*vy + vz*vz);
+      }
+    }
 
     // set shape of ellipsoidal particle
 

@@ -16,6 +16,8 @@
 
 #include <math.h>
 #include "pointers.h"
+#include <map>
+#include <string>
 
 namespace LAMMPS_NS {
 
@@ -92,6 +94,10 @@ class Domain : protected Pointers {
 
   int copymode;
 
+  typedef Region *(*RegionCreator)(LAMMPS *,int,char**);
+  typedef std::map<std::string,RegionCreator> RegionCreatorMap;
+  RegionCreatorMap *region_map;
+
   Domain(class LAMMPS *);
   virtual ~Domain();
   virtual void init();
@@ -115,6 +121,8 @@ class Domain : protected Pointers {
   void unmap(double *, imageint);
   void unmap(double *, imageint, double *);
   void image_flip(int, int, int);
+  int ownatom(int, double *, imageint *, int);
+  
   void set_lattice(int, char **);
   void add_region(int, char **);
   void delete_region(int, char **);
@@ -141,7 +149,7 @@ class Domain : protected Pointers {
   // indicates a special neighbor is actually not in a bond,
   //   but is a far-away image that should be treated as an unbonded neighbor
   // inline since called from neighbor build inner loop
-  //
+
   inline int minimum_image_check(double dx, double dy, double dz) {
     if (xperiodic && fabs(dx) > xprd_half) return 1;
     if (yperiodic && fabs(dy) > yprd_half) return 1;
@@ -151,6 +159,9 @@ class Domain : protected Pointers {
 
  protected:
   double small[3];                  // fractions of box lengths
+
+ private:
+  template <typename T> static Region *region_creator(LAMMPS *,int,char**);
 };
 
 }

@@ -14,6 +14,36 @@ colvarscript::colvarscript(colvarproxy *p)
 {
 }
 
+
+extern "C" {
+
+  // Generic hooks; NAMD and VMD have Tcl-specific versions in the respective proxies
+
+  int run_colvarscript_command(int argc, const char **argv)
+  {
+    colvarproxy *cvp = cvm::proxy;
+    if (!cvp) {
+      return -1;
+    }
+    if (!cvp->script) {
+      cvm::error("Called run_colvarscript_command without a script object initialized.\n");
+      return -1;
+    }
+    return cvp->script->run(argc, argv);
+  }
+
+  const char * get_colvarscript_result()
+  {
+    colvarproxy *cvp = cvm::proxy;
+    if (!cvp->script) {
+      cvm::error("Called run_colvarscript_command without a script object initialized.\n");
+      return "";
+    }
+    return cvp->script->result.c_str();
+  }
+}
+
+
 /// Run method based on given arguments
 int colvarscript::run(int argc, char const *argv[]) {
 
@@ -53,7 +83,6 @@ int colvarscript::run(int argc, char const *argv[]) {
   }
 
   if (cmd == "delete") {
-    colvars->reset();
     // Note: the delete bit may be ignored by some backends
     // it is mostly useful in VMD
     colvars->set_error_bits(DELETE_COLVARS);
@@ -126,7 +155,7 @@ int colvarscript::run(int argc, char const *argv[]) {
       result = "Missing arguments\n" + help_string();
       return COLVARSCRIPT_ERROR;
     }
-    proxy->input_prefix_str = argv[2];
+    proxy->input_prefix() = argv[2];
     if (colvars->setup_input() == COLVARS_OK) {
       return COLVARS_OK;
     } else {
@@ -164,8 +193,9 @@ int colvarscript::run(int argc, char const *argv[]) {
 
   if (cmd == "frame") {
     if (argc == 2) {
-      int f = proxy->frame();
-      if (f >= 0) {
+      long int f;
+      int error = proxy->get_frame(f);
+      if (error == COLVARS_OK) {
         result = cvm::to_str(f);
         return COLVARS_OK;
       } else {
@@ -174,10 +204,9 @@ int colvarscript::run(int argc, char const *argv[]) {
       }
     } else if (argc == 3) {
       // Failure of this function does not trigger an error, but
-      // returns the plain result to let scripts detect available frames
-      long int f = proxy->frame(strtol(argv[2], NULL, 10));
-      colvars->it = proxy->frame();
-      result = cvm::to_str(f);
+      // returns nonzero, to let scripts detect available frames
+      int error = proxy->set_frame(strtol(argv[2], NULL, 10));
+      result = cvm::to_str(error == COLVARS_OK ? 0 : -1);
       return COLVARS_OK;
     } else {
       result = "Wrong arguments to command \"frame\"\n" + help_string();
@@ -221,7 +250,7 @@ int colvarscript::proc_colvar(int argc, char const *argv[]) {
 
   if (subcmd == "update") {
     cv->calc();
-    cv->update();
+    cv->update_forces_energy();
     result = (cv->value()).to_simple_string();
     return COLVARS_OK;
   }
@@ -240,6 +269,22 @@ int colvarscript::proc_colvar(int argc, char const *argv[]) {
 
   if (subcmd == "getconfig") {
     result = cv->get_config();
+    return COLVARS_OK;
+  }
+
+  if (subcmd == "getappliedforce") {
+    result = (cv->applied_force()).to_simple_string();
+    return COLVARS_OK;
+  }
+
+  if (subcmd == "getsystemforce") {
+    // TODO warning here
+    result = (cv->total_force()).to_simple_string();
+    return COLVARS_OK;
+  }
+
+  if (subcmd == "gettotalforce") {
+    result = (cv->total_force()).to_simple_string();
     return COLVARS_OK;
   }
 
@@ -286,6 +331,11 @@ int colvarscript::proc_colvar(int argc, char const *argv[]) {
     return COLVARS_OK;
   }
 
+  if (subcmd == "state") {
+    cv->print_state();
+    return COLVARS_OK;
+  }
+
   result = "Syntax error\n" + help_string();
   return COLVARSCRIPT_ERROR;
 }
@@ -319,6 +369,11 @@ int colvarscript::proc_bias(int argc, char const *argv[]) {
 
   if (subcmd == "getconfig") {
     result = b->get_config();
+    return COLVARS_OK;
+  }
+
+  if (subcmd == "state") {
+    b->print_state();
     return COLVARS_OK;
   }
 
@@ -396,11 +451,12 @@ Input and output:\n\
   list biases                 -- return a list of all biases\n\
   load <file name>            -- load a state file (requires configuration)\n\
   save <file name>            -- save a state file (requires configuration)\n\
-  update                      -- recalculate colvars and biases based\n\
+  update                      -- recalculate colvars and biases\n\
   printframe                  -- return a summary of the current frame\n\
   printframelabels            -- return labels to annotate printframe's output\n";
 
-  if (proxy->frame() != COLVARS_NOT_IMPLEMENTED) {
+  long int tmp;
+  if (proxy->get_frame(tmp) != COLVARS_NOT_IMPLEMENTED) {
       buf += "\
   frame                       -- return current frame number\n\
   frame <new_frame>           -- set frame number\n";

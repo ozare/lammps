@@ -1,13 +1,13 @@
 /*
 //@HEADER
 // ************************************************************************
-// 
+//
 //                        Kokkos v. 2.0
 //              Copyright (2014) Sandia Corporation
-// 
+//
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -36,7 +36,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Questions? Contact  H. Carter Edwards (hcedwar@sandia.gov)
-// 
+//
 // ************************************************************************
 //@HEADER
 */
@@ -46,57 +46,89 @@
 
 #include <impl/Kokkos_Traits.hpp>
 #include <Kokkos_Core_fwd.hpp>
+#include <type_traits>
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
+
+/** KOKKOS_HAVE_TYPE( Type )
+ *
+ * defines a meta-function that check if a type expose an internal typedef or
+ * type alias which matches Type
+ *
+ * e.g.
+ *   KOKKOS_HAVE_TYPE( array_layout );
+ *   struct Foo { using array_layout = void; };
+ *   have_array_layout<Foo>::value == 1;
+ */
+#define KOKKOS_HAVE_TYPE( Type )                                                \
+template <typename T>                                                           \
+struct have_##Type {                                                            \
+  template <typename U> static std::false_type have_type(...);                  \
+  template <typename U> static std::true_type  have_type( typename U::Type* );  \
+  using type = decltype(have_type<T>(nullptr));                                 \
+  static constexpr bool value = type::value;                                    \
+}
+
+/** KOKKOS_IS_CONCEPT( Concept )
+ *
+ * defines a meta-function that check if a type match the given Kokkos concept
+ * type alias which matches Type
+ *
+ * e.g.
+ *   KOKKOS_IS_CONCEPT( array_layout );
+ *   struct Foo { using array_layout = Foo; };
+ *   is_array_layout<Foo>::value == 1;
+ */
+#define KOKKOS_IS_CONCEPT( Concept )                                            \
+template <typename T>                                                           \
+struct is_##Concept {                                                           \
+  template <typename U> static std::false_type have_concept(...);               \
+  template <typename U> static auto have_concept( typename U::Concept* )        \
+                          ->typename std::is_same<T, typename U::Concept>::type;\
+  using type = decltype(have_concept<T>(nullptr));                              \
+  static constexpr bool value = type::value;                                    \
+}
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
+namespace Kokkos { namespace Impl {
+
+template <typename T>
+using is_void = std::is_same<void,T>;
+
+// is_memory_space<T>::value
+KOKKOS_IS_CONCEPT( memory_space );
+
+// is_memory_traits<T>::value
+KOKKOS_IS_CONCEPT( memory_traits );
+
+// is_execution_space<T>::value
+KOKKOS_IS_CONCEPT( execution_space );
+
+// is_execution_policy<T>::value
+KOKKOS_IS_CONCEPT( execution_policy );
+
+// is_array_layout<T>::value
+KOKKOS_IS_CONCEPT( array_layout );
+
+// is_iteration_pattern<T>::value
+KOKKOS_IS_CONCEPT( iteration_pattern );
+
+// is_schedule_type<T>::value
+KOKKOS_IS_CONCEPT( schedule_type );
+
+// is_index_type<T>::value
+KOKKOS_IS_CONCEPT( index_type );
+
+}} // namespace Kokkos::Impl
+
 
 //----------------------------------------------------------------------------
 //----------------------------------------------------------------------------
 
 namespace Kokkos {
-namespace Impl {
-
-template< class C , class Enable = void >
-struct is_memory_space : public bool_< false > {};
-
-template< class C , class Enable = void >
-struct is_execution_space : public bool_< false > {};
-
-template< class C , class Enable = void >
-struct is_execution_policy : public bool_< false > {};
-
-template< class C , class Enable = void >
-struct is_array_layout : public Impl::false_type {};
-
-template< class C , class Enable = void >
-struct is_memory_traits : public Impl::false_type {};
-
-
-template< class C >
-struct is_memory_space< C , typename Impl::enable_if_type< typename C::memory_space >::type >
-  : public bool_< Impl::is_same< C , typename C::memory_space >::value > {};
-
-template< class C >
-struct is_execution_space< C , typename Impl::enable_if_type< typename C::execution_space >::type >
-  : public bool_< Impl::is_same< C , typename C::execution_space >::value > {};
-
-template< class C >
-struct is_execution_policy< C , typename Impl::enable_if_type< typename C::execution_policy >::type >
-  : public bool_< Impl::is_same< C , typename C::execution_policy >::value > {};
-
-template< class C >
-struct is_array_layout< C , typename Impl::enable_if_type< typename C::array_layout >::type >
-  : public bool_< Impl::is_same< C , typename C::array_layout >::value > {};
-
-template< class C >
-struct is_memory_traits< C , typename Impl::enable_if_type< typename C::memory_traits >::type >
-  : public bool_< Impl::is_same< C , typename C::memory_traits >::value > {};
-
-}
-}
-
-namespace Kokkos {
-//----------------------------------------------------------------------------
 
 template< class ExecutionSpace , class MemorySpace >
 struct Device {
@@ -110,9 +142,11 @@ struct Device {
 };
 }
 
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
 namespace Kokkos {
 namespace Impl {
-//----------------------------------------------------------------------------
 
 template< class C , class Enable = void >
 struct is_space : public Impl::false_type {};

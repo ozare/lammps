@@ -38,12 +38,15 @@ using namespace MathConst;
 /* ---------------------------------------------------------------------- */
 
 ComputeRDF::ComputeRDF(LAMMPS *lmp, int narg, char **arg) :
-  Compute(lmp, narg, arg)
+  Compute(lmp, narg, arg),
+  rdfpair(NULL), nrdfpair(NULL), ilo(NULL), ihi(NULL), jlo(NULL), jhi(NULL),
+  hist(NULL), histall(NULL), typecount(NULL), icount(NULL), jcount(NULL), duplicates(NULL)
 {
   if (narg < 4 || (narg-4) % 2) error->all(FLERR,"Illegal compute rdf command");
 
   array_flag = 1;
   extarray = 0;
+  dynamic_group_allow = 0;
 
   nbin = force->inumeric(FLERR,arg[3]);
   if (nbin < 1) error->all(FLERR,"Illegal compute rdf command");
@@ -70,8 +73,8 @@ ComputeRDF::ComputeRDF(LAMMPS *lmp, int narg, char **arg) :
     npairs = 0;
     int iarg = 4;
     while (iarg < narg) {
-      force->bounds(arg[iarg],atom->ntypes,ilo[npairs],ihi[npairs]);
-      force->bounds(arg[iarg+1],atom->ntypes,jlo[npairs],jhi[npairs]);
+      force->bounds(FLERR,arg[iarg],atom->ntypes,ilo[npairs],ihi[npairs]);
+      force->bounds(FLERR,arg[iarg+1],atom->ntypes,jlo[npairs],jhi[npairs]);
       if (ilo[npairs] > ihi[npairs] || jlo[npairs] > jhi[npairs])
         error->all(FLERR,"Illegal compute rdf command");
       npairs++;

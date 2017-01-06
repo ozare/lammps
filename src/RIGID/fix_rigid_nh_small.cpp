@@ -50,7 +50,12 @@ enum{FULL_BODY,INITIAL,FINAL,FORCE_TORQUE,VCM_ANGMOM,XCM_MASS,ITENSOR,DOF};
 /* ---------------------------------------------------------------------- */
 
 FixRigidNHSmall::FixRigidNHSmall(LAMMPS *lmp, int narg, char **arg) :
-  FixRigidSmall(lmp, narg, arg)
+  FixRigidSmall(lmp, narg, arg), w(NULL), wdti1(NULL), 
+  wdti2(NULL), wdti4(NULL), q_t(NULL), q_r(NULL), eta_t(NULL), 
+  eta_r(NULL), eta_dot_t(NULL), eta_dot_r(NULL), f_eta_t(NULL), 
+  f_eta_r(NULL), q_b(NULL), eta_b(NULL), eta_dot_b(NULL), 
+  f_eta_b(NULL), rfix(NULL), id_temp(NULL), id_press(NULL), 
+  temperature(NULL), pressure(NULL)
 {
   // error checks
 
@@ -163,6 +168,9 @@ FixRigidNHSmall::FixRigidNHSmall(LAMMPS *lmp, int narg, char **arg) :
 
   tcomputeflag = 0;
   pcomputeflag = 0;
+
+  id_temp = NULL;
+  id_press = NULL;
 }
 
 /* ---------------------------------------------------------------------- */
@@ -176,10 +184,8 @@ FixRigidNHSmall::~FixRigidNHSmall()
 
   if (rfix) delete [] rfix;
 
-  if (tcomputeflag) {
-    modify->delete_compute(id_temp);
-    delete [] id_temp;
-  }
+  if (tcomputeflag) modify->delete_compute(id_temp);
+  delete [] id_temp;
 
   // delete pressure if fix created it
 
@@ -643,6 +649,7 @@ void FixRigidNHSmall::final_integrate()
   double tmp,scale_t[3],scale_r;
   double dtfm;
   double mbody[3],tbody[3],fquat[4];
+
   double dtf2 = dtf * 2.0;
 
   // compute scale variables
@@ -1374,7 +1381,6 @@ int FixRigidNHSmall::modify_param(int narg, char **arg)
 {
   if (strcmp(arg[0],"temp") == 0) {
     if (narg < 2) error->all(FLERR,"Illegal fix_modify command");
-    if (!pstat_flag) error->all(FLERR,"Illegal fix_modify command");
     if (tcomputeflag) {
       modify->delete_compute(id_temp);
       tcomputeflag = 0;

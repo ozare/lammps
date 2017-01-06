@@ -1,6 +1,8 @@
 # LAMMPS multiple-machine -*- Makefile -*-
 
 SHELL = /bin/bash
+PYTHON = python
+
 #.IGNORE:
 
 # Definitions
@@ -42,20 +44,25 @@ endif
 # Package variables
 
 PACKAGE = asphere body class2 colloid compress coreshell dipole gpu \
-          granular kim kokkos kspace manybody mc meam misc molecule mpiio \
-          opt peri poems python qeq replica rigid shock snap srd \
-          voronoi xtc
+	  granular kim \
+	  kokkos kspace manybody mc meam misc molecule mpiio opt peri poems \
+	  python qeq replica rigid shock snap srd voronoi
 
+<<<<<<< HEAD
 PACKUSER = user-atc user-awpmd user-bop user-cg-cmm user-colvars user-cuda \
+=======
+PACKUSER = user-atc user-awpmd user-cg-cmm user-colvars \
+>>>>>>> 2fc5ad1ebd8609e2768b73c303f3fbddbe114893
 	   user-diffraction user-dpd user-drude user-eff user-fep user-h5md \
-	   user-intel user-lb user-manifold user-mgpt \
-	   user-misc user-molfile user-omp user-phonon user-qmmm user-qtb \
-	   user-quip user-reaxc user-smd user-smtbq user-sph user-tally \
-	   user-vtk
+	   user-hadress user-intel user-lb user-manifold user-mgpt \
+	   user-misc user-molfile user-nc-dump user-omp user-phonon \
+	   user-qmmm user-qtb user-quip user-reaxc user-smd user-smtbq \
+	   user-sph user-tally user-vtk
 
 PACKLIB = compress gpu kim kokkos meam mpiio poems python voronoi \
-	  user-atc user-awpmd user-colvars user-cuda user-h5md user-intel \
-	  user-lb user-molfile user-qmmm user-quip user-smd user-vtk
+	  user-atc user-awpmd user-colvars user-h5md user-intel \
+	  user-lb user-molfile user-nc-dump user-qmmm user-quip \
+	  user-smd user-vtk
 
 PACKALL = $(PACKAGE) $(PACKUSER)
 
@@ -90,7 +97,7 @@ help:
 	@echo 'make package-update (pu) replace src files with updated package files'
 	@echo 'make package-overwrite   replace package files with src files'
 	@echo 'make package-diff (pd)   diff src files against package files'
-	@echo 'make package-purge       purge obsolete copies of package sources'
+	@echo 'make purge               purge obsolete copies of source files'
 	@echo ''
 	@echo 'make machine             build LAMMPS for machine'
 	@echo 'make mode=lib machine    build LAMMPS as static lib for machine'
@@ -206,15 +213,15 @@ mpi-stubs:
 # install LAMMPS shared lib and Python wrapper for Python usage
 
 install-python:
-	@python ../python/install.py
+	@$(PYTHON) ../python/install.py
 
 # Create a tarball of src dir and packages
 
 tar:
 	@cd STUBS; $(MAKE) clean
 	@cd ..; tar cvzf src/$(ROOT)_src.tar.gz \
-	  src/Make* src/Package.sh src/Depend.sh \
-	  src/MAKE src/*.cpp src/*.h src/STUBS \
+	  src/Make* src/Package.sh src/Depend.sh src/Install.sh \
+	  src/MAKE src/DEPEND src/*.cpp src/*.h src/STUBS \
 	  $(patsubst %,src/%,$(PACKAGEUC)) $(patsubst %,src/%,$(PACKUSERUC)) \
           --exclude=*/.svn
 	@cd STUBS; $(MAKE)
@@ -320,7 +327,7 @@ package-diff pd:
 	@echo ''
 	@for p in $(PACKUSERUC); do $(SHELL) Package.sh $$p diff; done
 
-package-purge: Purge.list
+purge: Purge.list
 	@echo 'Purging obsolete and auto-generated source files'
 	@for f in `grep -v '#' Purge.list` ;		\
 	    do test -f $$f && rm $$f && echo $$f || : ;		\

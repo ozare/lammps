@@ -1,5 +1,5 @@
-/* 
-   Copyright (c) 2012,2013   Axel Kohlmeyer <akohlmey@gmail.com> 
+/*
+   Copyright (c) 2012,2013   Axel Kohlmeyer <akohlmey@gmail.com>
    All rights reserved.
 
    Redistribution and use in source and binary forms, with or without
@@ -38,7 +38,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 /* internal definitions for the fastermath library */
 
 /* IEEE 754 double precision floating point data manipulation */
-typedef union 
+typedef union
 {
     double   f;
     uint64_t u;
@@ -114,15 +114,20 @@ static double fm_exp2(double x)
 
 double fm_exp_(double *x)
 {
+#if defined(__BYTE_ORDER__)
+#if __BYTE_ORDER__ == __ORDER_LITTLE_ENDIAN__
     return fm_exp2(FM_DOUBLE_LOG2OFE * (*x));
+#endif
+#endif
+    return exp(*x);
 }
 
-/* 
+/*
  * Local Variables:
  * mode: c
  * compile-command: "make -C .."
  * c-basic-offset: 4
- * fill-column: 76 
- * indent-tabs-mode: nil 
- * End: 
+ * fill-column: 76
+ * indent-tabs-mode: nil
+ * End:
  */

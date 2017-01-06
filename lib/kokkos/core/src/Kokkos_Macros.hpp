@@ -133,10 +133,22 @@
 // still identifies as 7.0
 #error "Cuda version 7.5 or greater required for host-to-device Lambda support"
 #endif
+#if ( CUDA_VERSION < 8000 )
 #define KOKKOS_LAMBDA [=]__device__
+#else
+#define KOKKOS_LAMBDA [=]__host__ __device__
+#endif
 #define KOKKOS_HAVE_CXX11_DISPATCH_LAMBDA 1
 #endif
 #endif /* #if defined( KOKKOS_HAVE_CUDA ) && defined( __CUDACC__ ) */
+
+
+#if defined(KOKKOS_HAVE_CXX11_DISPATCH_LAMBDA)
+   // Cuda version 8.0 still needs the functor wrapper
+   #if (KOKKOS_HAVE_CXX11_DISPATCH_LAMBDA /* && (CUDA_VERSION < 8000) */ )
+      #define KOKKOS_IMPL_NEED_FUNCTOR_WRAPPER
+   #endif
+#endif
 
 /*--------------------------------------------------------------------------*/
 /* Language info: C++, CUDA, OPENMP */
@@ -374,6 +386,12 @@
 #endif
 
 //----------------------------------------------------------------------------
+/** Define Macro for alignment: */
+#if ! defined(KOKKOS_ALIGN_16)
+#define KOKKOS_ALIGN_16 __attribute__((aligned(16)))
+#endif
+
+//----------------------------------------------------------------------------
 /** Determine the default execution space for parallel dispatch.
  *  There is zero or one default execution space specified.
  */
@@ -422,5 +440,31 @@
 #define KOKKOS_POSIX_MEMALIGN_AVAILABLE 1
 #endif
 #endif
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
+/**Enable Profiling by default**/
+
+#ifndef KOKKOS_ENABLE_PROFILING
+#define KOKKOS_ENABLE_PROFILING 1
+#endif
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+/* Transitional macro to change between old and new View
+ * are no longer supported.
+ */
+
+#if defined( KOKKOS_USING_DEPRECATED_VIEW )
+#error "Kokkos deprecated View has been removed"
+#endif
+
+#define KOKKOS_USING_EXP_VIEW 1
+#define KOKKOS_USING_EXPERIMENTAL_VIEW
+
+//----------------------------------------------------------------------------
+//----------------------------------------------------------------------------
+
 #endif /* #ifndef KOKKOS_MACROS_HPP */
 

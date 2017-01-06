@@ -1,13 +1,13 @@
 /*
 //@HEADER
 // ************************************************************************
-// 
+//
 //                        Kokkos v. 2.0
 //              Copyright (2014) Sandia Corporation
-// 
+//
 // Under the terms of Contract DE-AC04-94AL85000 with Sandia Corporation,
 // the U.S. Government retains certain rights in this software.
-// 
+//
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
 // met:
@@ -36,7 +36,7 @@
 // SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 //
 // Questions? Contact  H. Carter Edwards (hcedwar@sandia.gov)
-// 
+//
 // ************************************************************************
 //@HEADER
 */
@@ -107,15 +107,15 @@ TEST_F( qthread , view_nested_view )
 
 TEST_F( qthread , range_tag )
 {
-  TestRange< Kokkos::Qthread >::test_for(1000);
-  TestRange< Kokkos::Qthread >::test_reduce(1000);
-  TestRange< Kokkos::Qthread >::test_scan(1000);
+  TestRange< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >::test_for(1000);
+  TestRange< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >::test_reduce(1000);
+  TestRange< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >::test_scan(1000);
 }
 
 TEST_F( qthread , team_tag )
 {
-  TestTeamPolicy< Kokkos::Qthread >::test_for( 1000 );
-  TestTeamPolicy< Kokkos::Qthread >::test_reduce( 1000 );
+  TestTeamPolicy< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >::test_for( 1000 );
+  TestTeamPolicy< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >::test_reduce( 1000 );
 }
 
 TEST_F( qthread, long_reduce) {
@@ -139,11 +139,11 @@ TEST_F( qthread, long_reduce_dynamic_view ) {
 }
 
 TEST_F( qthread, team_long_reduce) {
-  TestReduceTeam< long ,   Kokkos::Qthread >( 1000000 );
+  TestReduceTeam< long ,   Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >( 1000000 );
 }
 
 TEST_F( qthread, team_double_reduce) {
-  TestReduceTeam< double ,   Kokkos::Qthread >( 1000000 );
+  TestReduceTeam< double ,   Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >( 1000000 );
 }
 
 
@@ -246,13 +246,17 @@ TEST_F( qthread , scan )
 }
 
 TEST_F( qthread, team_shared ) {
-  TestSharedTeam< Kokkos::Qthread >();
+  TestSharedTeam< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >();
+}
+
+TEST_F( qthread, shmem_size) {
+  TestShmemSize< Kokkos::Qthread >();
 }
 
 TEST_F( qthread , team_scan )
 {
-  TestScanTeam< Kokkos::Qthread >( 10 );
-  TestScanTeam< Kokkos::Qthread >( 10000 );
+  TestScanTeam< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >( 10 );
+  TestScanTeam< Kokkos::Qthread , Kokkos::Schedule<Kokkos::Static> >( 10000 );
 }
 
 #if 0 /* disable */

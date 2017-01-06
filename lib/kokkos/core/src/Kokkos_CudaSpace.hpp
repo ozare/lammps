@@ -54,10 +54,7 @@
 
 #include <Kokkos_HostSpace.hpp>
 
-#include <impl/Kokkos_AllocationTracker.hpp>
-
 #include <Cuda/Kokkos_Cuda_abort.hpp>
-#include <Cuda/Kokkos_Cuda_BasicAllocators.hpp>
 
 /*--------------------------------------------------------------------------*/
 
@@ -77,35 +74,10 @@ public:
 
   /*--------------------------------*/
 
-#if ! defined( KOKKOS_USING_EXPERIMENTAL_VIEW )
-
-  typedef Impl::CudaMallocAllocator allocator;
-
-  /** \brief  Allocate a contiguous block of memory.
-   *
-   *  The input label is associated with the block of memory.
-   *  The block of memory is tracked via reference counting where
-   *  allocation gives it a reference count of one.
-   */
-  static Impl::AllocationTracker allocate_and_track( const std::string & label, const size_t size );
-
-  /*--------------------------------*/
-  /** \brief  Cuda specific function to attached texture object to an allocation.
-   *          Output the texture object, base pointer, and offset from the input pointer.
-   */
-#if defined( __CUDACC__ )
-  static void texture_object_attach(  Impl::AllocationTracker const & tracker
-                                    , unsigned type_size
-                                    , ::cudaChannelFormatDesc const & desc
-                                   );
-#endif
-
-#endif /* #if ! defined( KOKKOS_USING_EXPERIMENTAL_VIEW ) */
-
-  /*--------------------------------*/
-
   CudaSpace();
+  CudaSpace( CudaSpace && rhs ) = default ;
   CudaSpace( const CudaSpace & rhs ) = default ;
+  CudaSpace & operator = ( CudaSpace && rhs ) = default ;
   CudaSpace & operator = ( const CudaSpace & rhs ) = default ;
   ~CudaSpace() = default ;
 
@@ -135,7 +107,7 @@ namespace Impl {
 /// where the hash value is derived from the address of the
 /// object for which an atomic operation is performed.
 /// This function initializes the locks to zero (unset).
-void init_lock_array_cuda_space();
+void init_lock_arrays_cuda_space();
 
 /// \brief Retrieve the pointer to the lock array for arbitrary size atomics.
 ///
@@ -144,7 +116,23 @@ void init_lock_array_cuda_space();
 /// object for which an atomic operation is performed.
 /// This function retrieves the lock array pointer.
 /// If the array is not yet allocated it will do so.
-int* lock_array_cuda_space_ptr(bool deallocate = false);
+int* atomic_lock_array_cuda_space_ptr(bool deallocate = false);
+
+/// \brief Retrieve the pointer to the scratch array for team and thread private global memory.
+///
+/// Team and Thread private scratch allocations in
+/// global memory are aquired via locks.
+/// This function retrieves the lock array pointer.
+/// If the array is not yet allocated it will do so.
+int* scratch_lock_array_cuda_space_ptr(bool deallocate = false);
+
+/// \brief Retrieve the pointer to the scratch array for unique identifiers.
+///
+/// Unique identifiers in the range 0-Cuda::concurrency
+/// are provided via locks.
+/// This function retrieves the lock array pointer.
+/// If the array is not yet allocated it will do so.
+int* threadid_lock_array_cuda_space_ptr(bool deallocate = false);
 }
 } // namespace Kokkos
 
@@ -170,35 +158,10 @@ public:
 
   /*--------------------------------*/
 
-#if ! defined( KOKKOS_USING_EXPERIMENTAL_VIEW )
-
-  typedef Impl::CudaUVMAllocator allocator;
-
-  /** \brief  Allocate a contiguous block of memory.
-   *
-   *  The input label is associated with the block of memory.
-   *  The block of memory is tracked via reference counting where
-   *  allocation gives it a reference count of one.
-   */
-  static Impl::AllocationTracker allocate_and_track( const std::string & label, const size_t size );
-
-
-  /** \brief  Cuda specific function to attached texture object to an allocation.
-   *          Output the texture object, base pointer, and offset from the input pointer.
-   */
-#if defined( __CUDACC__ )
-  static void texture_object_attach(  Impl::AllocationTracker const & tracker
-                                    , unsigned type_size
-                                    , ::cudaChannelFormatDesc const & desc
-                                   );
-#endif
-
-#endif /* #if ! defined( KOKKOS_USING_EXPERIMENTAL_VIEW ) */
-
-  /*--------------------------------*/
-
   CudaUVMSpace();
+  CudaUVMSpace( CudaUVMSpace && rhs ) = default ;
   CudaUVMSpace( const CudaUVMSpace & rhs ) = default ;
+  CudaUVMSpace & operator = ( CudaUVMSpace && rhs ) = default ;
   CudaUVMSpace & operator = ( const CudaUVMSpace & rhs ) = default ;
   ~CudaUVMSpace() = default ;
 
@@ -238,24 +201,10 @@ public:
 
   /*--------------------------------*/
 
-#if ! defined( KOKKOS_USING_EXPERIMENTAL_VIEW )
-
-  typedef Impl::CudaHostAllocator allocator ;
-
-  /** \brief  Allocate a contiguous block of memory.
-   *
-   *  The input label is associated with the block of memory.
-   *  The block of memory is tracked via reference counting where
-   *  allocation gives it a reference count of one.
-   */
-  static Impl::AllocationTracker allocate_and_track( const std::string & label, const size_t size );
-
-#endif /* #if ! defined( KOKKOS_USING_EXPERIMENTAL_VIEW ) */
-
-  /*--------------------------------*/
-
   CudaHostPinnedSpace();
+  CudaHostPinnedSpace( CudaHostPinnedSpace && rhs ) = default ;
   CudaHostPinnedSpace( const CudaHostPinnedSpace & rhs ) = default ;
+  CudaHostPinnedSpace & operator = ( CudaHostPinnedSpace && rhs ) = default ;
   CudaHostPinnedSpace & operator = ( const CudaHostPinnedSpace & rhs ) = default ;
   ~CudaHostPinnedSpace() = default ;
 

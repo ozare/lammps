@@ -1,4 +1,4 @@
-/// -*- c++ -*-
+// -*- c++ -*-
 
 #ifndef COLVARPROXY_H
 #define COLVARPROXY_H
@@ -25,7 +25,7 @@ public:
   colvarmodule *colvars;
 
   /// Default constructor
-  inline colvarproxy() : script(NULL) {}
+  inline colvarproxy() : script(NULL), b_smp_active(true) {}
 
   /// Default destructor
   virtual ~colvarproxy() {}
@@ -69,17 +69,18 @@ public:
   virtual cvm::real rand_gaussian(void) = 0;
 
   /// \brief Get the current frame number
-  virtual int frame() { return COLVARS_NOT_IMPLEMENTED; }
+  // Returns error code
+  virtual int get_frame(long int&) { return COLVARS_NOT_IMPLEMENTED; }
 
-  /// \brief Set the current frame number
-  // return 0 on success, -1 on failure
-  virtual int frame(int) { return COLVARS_NOT_IMPLEMENTED; }
+  /// \brief Set the current frame number (as well as colvarmodule::it)
+  // Returns error code
+  virtual int set_frame(long int) { return COLVARS_NOT_IMPLEMENTED; }
 
   /// \brief Prefix to be used for input files (restarts, not
   /// configuration)
   std::string input_prefix_str, output_prefix_str, restart_output_prefix_str;
 
-  inline std::string input_prefix()
+  inline std::string & input_prefix()
   {
     return input_prefix_str;
   }
@@ -112,6 +113,65 @@ protected:
   std::list<std::string>    output_stream_names;
 
 public:
+
+  // ***************** SHARED-MEMORY PARALLELIZATION *****************
+
+  /// Whether threaded parallelization is available (TODO: make this a cvm::deps feature)
+  virtual int smp_enabled()
+  {
+    return COLVARS_NOT_IMPLEMENTED;
+  }
+
+  /// Whether threaded parallelization should be used (TODO: make this a cvm::deps feature)
+  bool b_smp_active;
+
+  /// Distribute calculation of colvars (and their components) across threads
+  virtual int smp_colvars_loop()
+  {
+    return COLVARS_NOT_IMPLEMENTED;
+  }
+
+  /// Distribute calculation of biases across threads
+  virtual int smp_biases_loop()
+  {
+    return COLVARS_NOT_IMPLEMENTED;
+  }
+
+  /// Distribute calculation of biases across threads 2nd through last, with all scripted biased on 1st thread
+  virtual int smp_biases_script_loop()
+  {
+    return COLVARS_NOT_IMPLEMENTED;
+  }
+
+  /// Index of this thread
+  virtual int smp_thread_id()
+  {
+    return COLVARS_NOT_IMPLEMENTED;
+  }
+
+  /// Number of threads sharing this address space
+  virtual int smp_num_threads()
+  {
+    return COLVARS_NOT_IMPLEMENTED;
+  }
+
+  /// Lock the proxy's shared data for access by a thread, if threads are implemented; if not implemented, does nothing
+  virtual int smp_lock()
+  {
+    return COLVARS_OK;
+  }
+
+  /// Attempt to lock the proxy's shared data
+  virtual int smp_trylock()
+  {
+    return COLVARS_OK;
+  }
+
+  /// Release the lock
+  virtual int smp_unlock()
+  {
+    return COLVARS_OK;
+  }
 
   // **************** MULTIPLE REPLICAS COMMUNICATION ****************
 
@@ -238,12 +298,20 @@ public:
   /// Pass restraint energy value for current timestep to MD engine
   virtual void add_energy(cvm::real energy) = 0;
 
-  /// Tell the proxy whether system forces are needed (may not always be available)
-  virtual void request_system_force(bool yesno)
+  /// Tell the proxy whether total forces are needed (may not always be available)
+  virtual void request_total_force(bool yesno)
   {
     if (yesno == true)
-      cvm::error("Error: system forces are currently not implemented.\n",
+      cvm::error("Error: total forces are currently not implemented.\n",
                  COLVARS_NOT_IMPLEMENTED);
+  }
+
+  /// Are total forces being used?
+  virtual bool total_forces_enabled() const
+  {
+    cvm::error("Error: total forces are currently not implemented.\n",
+               COLVARS_NOT_IMPLEMENTED);
+    return false;
   }
 
   /// \brief Get the PBC-aware distance vector between two positions
@@ -297,8 +365,6 @@ protected:
   std::vector<cvm::rvector> atoms_positions;
   /// \brief Most recent total forces on each atom
   std::vector<cvm::rvector> atoms_total_forces;
-  /// \brief Most recent forces applied by external potentials onto each atom
-  std::vector<cvm::rvector> atoms_applied_forces;
   /// \brief Forces applied from colvars, to be communicated to the MD integrator
   std::vector<cvm::rvector> atoms_new_colvar_forces;
 
@@ -311,7 +377,6 @@ protected:
     atoms_charges.push_back(0.0);
     atoms_positions.push_back(cvm::rvector(0.0, 0.0, 0.0));
     atoms_total_forces.push_back(cvm::rvector(0.0, 0.0, 0.0));
-    atoms_applied_forces.push_back(cvm::rvector(0.0, 0.0, 0.0));
     atoms_new_colvar_forces.push_back(cvm::rvector(0.0, 0.0, 0.0));
     return (atoms_ids.size() - 1);
   }
@@ -382,10 +447,10 @@ public:
     return atoms_positions[index];
   }
 
-  /// Read the current total system force of the given atom
-  inline cvm::rvector get_atom_system_force(int index) const
+  /// Read the current total force of the given atom
+  inline cvm::rvector get_atom_total_force(int index) const
   {
-    return atoms_total_forces[index] - atoms_applied_forces[index];
+    return atoms_total_forces[index];
   }
 
   /// Request that this force is applied to the given atom
@@ -408,7 +473,6 @@ public:
   inline std::vector<cvm::real> *modify_atom_charges() { return &atoms_charges; }
   inline std::vector<cvm::rvector> *modify_atom_positions() { return &atoms_positions; }
   inline std::vector<cvm::rvector> *modify_atom_total_forces() { return &atoms_total_forces; }
-  inline std::vector<cvm::rvector> *modify_atom_applied_forces() { return &atoms_applied_forces; }
   inline std::vector<cvm::rvector> *modify_atom_new_colvar_forces() { return &atoms_new_colvar_forces; }
 
   /// \brief Read atom identifiers from a file \param filename name of
@@ -456,8 +520,6 @@ protected:
   std::vector<cvm::rvector> atom_groups_coms;
   /// \brief Most recently updated total forces on the com of each group
   std::vector<cvm::rvector> atom_groups_total_forces;
-  /// \brief Most recent forces applied by external potentials onto each group
-  std::vector<cvm::rvector> atom_groups_applied_forces;
   /// \brief Forces applied from colvars, to be communicated to the MD integrator
   std::vector<cvm::rvector> atom_groups_new_colvar_forces;
 
@@ -466,9 +528,9 @@ protected:
 public:
 
   /// \brief Whether this proxy implementation has capability for scalable groups
-  virtual bool has_scalable_groups() const
+  virtual int scalable_group_coms()
   {
-    return false;
+    return COLVARS_NOT_IMPLEMENTED;
   }
 
   /// Used by all init_atom_group() functions: create a slot for an atom group not requested yet
@@ -476,11 +538,11 @@ public:
   inline int add_atom_group_slot(int atom_group_id)
   {
     atom_groups_ids.push_back(atom_group_id);
+    atom_groups_ncopies.push_back(1);
     atom_groups_masses.push_back(1.0);
     atom_groups_charges.push_back(0.0);
     atom_groups_coms.push_back(cvm::rvector(0.0, 0.0, 0.0));
     atom_groups_total_forces.push_back(cvm::rvector(0.0, 0.0, 0.0));
-    atom_groups_applied_forces.push_back(cvm::rvector(0.0, 0.0, 0.0));
     atom_groups_new_colvar_forces.push_back(cvm::rvector(0.0, 0.0, 0.0));
     return (atom_groups_ids.size() - 1);
   }
@@ -496,18 +558,18 @@ public:
   /// \brief Used by the atom_group class destructor
   virtual void clear_atom_group(int index)
   {
+    if (cvm::debug()) {
+      log("Trying to remove/disable atom group number "+cvm::to_str(index)+"\n");
+    }
+
     if (((size_t) index) >= atom_groups_ids.size()) {
       cvm::error("Error: trying to disable an atom group that was not previously requested.\n",
                  INPUT_ERROR);
     }
 
-    atom_groups_ids.erase(atom_groups_ids.begin()+index);
-    atom_groups_masses.erase(atom_groups_masses.begin()+index);
-    atom_groups_charges.erase(atom_groups_charges.begin()+index);
-    atom_groups_coms.erase(atom_groups_coms.begin()+index);
-    atom_groups_total_forces.erase(atom_groups_total_forces.begin()+index);
-    atom_groups_applied_forces.erase(atom_groups_applied_forces.begin()+index);
-    atom_groups_new_colvar_forces.erase(atom_groups_new_colvar_forces.begin()+index);
+    if (atom_groups_ncopies[index] > 0) {
+      atom_groups_ncopies[index] -= 1;
+    }
   }
 
   /// Get the numeric ID of the given atom group (for the MD program)
@@ -534,10 +596,10 @@ public:
     return atom_groups_coms[index];
   }
 
-  /// Read the current total system force of the given atom group
-  inline cvm::rvector get_atom_group_system_force(int index) const
+  /// Read the current total force of the given atom group
+  inline cvm::rvector get_atom_group_total_force(int index) const
   {
-    return atom_groups_total_forces[index] - atom_groups_applied_forces[index];
+    return atom_groups_total_forces[index];
   }
 
   /// Request that this force is applied to the given atom group

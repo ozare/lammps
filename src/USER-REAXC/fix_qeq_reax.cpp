@@ -71,6 +71,8 @@ FixQEqReax::FixQEqReax(LAMMPS *lmp, int narg, char **arg) :
   if (narg != 8) error->all(FLERR,"Illegal fix qeq/reax command");
 
   nevery = force->inumeric(FLERR,arg[3]);
+  if (nevery <= 0) error->all(FLERR,"Illegal fix qeq/reax command");
+
   swa = force->numeric(FLERR,arg[4]);
   swb = force->numeric(FLERR,arg[5]);
   tolerance = force->numeric(FLERR,arg[6]);
@@ -127,6 +129,8 @@ FixQEqReax::~FixQEqReax()
 {
   // unregister callbacks to this fix from Atom class
 
+  if (copymode) return;
+
   atom->delete_callback(id,0);
 
   memory->destroy(s_hist);
@@ -162,6 +166,9 @@ void FixQEqReax::pertype_parameters(char *arg)
   if (strcmp(arg,"reax/c") == 0) {
     reaxflag = 1;
     Pair *pair = force->pair_match("reax/c",1);
+    if (pair == NULL)
+      pair = force->pair_match("reax/c/kk",1);
+
     if (pair == NULL) error->all(FLERR,"No pair reax/c for fix qeq/reax");
     int tmp;
     chi = (double *) pair->extract("chi",tmp);
@@ -409,7 +416,8 @@ void FixQEqReax::init_taper()
 
 void FixQEqReax::setup_pre_force(int vflag)
 {
-  neighbor->build_one(list);
+  // should not be needed
+  // neighbor->build_one(list);
 
   deallocate_storage();
   allocate_storage();

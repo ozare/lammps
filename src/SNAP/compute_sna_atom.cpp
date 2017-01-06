@@ -30,7 +30,8 @@
 using namespace LAMMPS_NS;
 
 ComputeSNAAtom::ComputeSNAAtom(LAMMPS *lmp, int narg, char **arg) :
-  Compute(lmp, narg, arg)
+  Compute(lmp, narg, arg), cutsq(NULL), list(NULL), sna(NULL), 
+  radelem(NULL), wjelem(NULL)
 {
   double rmin0, rfac0;
   int twojmax, switchflag;
@@ -183,7 +184,7 @@ void ComputeSNAAtom::compute_peratom()
 
   // grow sna array if necessary
 
-  if (atom->nlocal > nmax) {
+  if (atom->nmax > nmax) {
     memory->destroy(sna);
     nmax = atom->nmax;
     memory->create(sna,nmax,size_peratom_cols,"sna/atom:sna");

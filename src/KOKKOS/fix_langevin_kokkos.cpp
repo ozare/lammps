@@ -44,6 +44,7 @@ template<class DeviceType>
 FixLangevinKokkos<DeviceType>::FixLangevinKokkos(LAMMPS *lmp, int narg, char **arg) :
   FixLangevin(lmp, narg, arg),rand_pool(seed + comm->me)
 {
+  kokkosable = 1;
   atomKK = (AtomKokkos *) atom;
   int ntypes = atomKK->ntypes;
 
@@ -667,7 +668,7 @@ void FixLangevinKokkos<DeviceType>::compute_target()
         error->one(FLERR,"Fix langevin variable returned negative temperature");
       tsqrt = sqrt(t_target);
     } else {
-      if (nlocal > maxatom2) {
+      if (atom->nmax > maxatom2) {
         maxatom2 = atom->nmax;
         memory->destroy_kokkos(k_tforce,tforce);
         memory->create_kokkos(k_tforce,tforce,maxatom2,"langevin:tforce");

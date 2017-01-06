@@ -1,4 +1,4 @@
-# intel_cpu = USER-INTEL package with CPU optimizations, Intel MPI, MKL FFT
+# intel_cpu_intelmpi = USER-INTEL package, Intel MPI, MKL FFT
 
 SHELL = /bin/sh
 
@@ -15,7 +15,7 @@ DEPFLAGS =	-M
 
 LINK =		mpiicpc
 LINKFLAGS =	-g -qopenmp $(OPTFLAGS)
-LIB =           -ltbbmalloc
+LIB =           -ltbbmalloc -ltbbmalloc_proxy
 SIZE =		size
 
 ARCHIVE =	ar
